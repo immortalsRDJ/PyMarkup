@@ -9,10 +9,6 @@ A Python toolkit for estimating firm-level markups using production function-bas
 * Free software: MIT License
 * Documentation: https://PyMarkup.readthedocs.io.
 
-## Features
+## TODO
 
-* TODO
-
-## Credits
-
-This package was created with [Cookiecutter](https://github.com/audreyfeldroy/cookiecutter) and the [audreyfeldroy/cookiecutter-pypackage](https://github.com/audreyfeldroy/cookiecutter-pypackage) project template.
+* Decomposition
