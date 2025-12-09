@@ -1,28 +1,9 @@
 """
-Python reimplementation of the Stata routine in ``Estimate_Coefficients.do``.
+Self-contained Python replacement for ``0.3 theta_estimation.do``.
 
-This script estimates production-function output elasticities using
-rolling 5-year windows by 2-digit industry, following the Wooldridge-style
-IV/GMM approach from the original .do file. It then produces the same
-intermediate outputs (theta_W* and cost-share medians).
-
-Key differences vs Stata version:
-- Uses ``linearmodels`` IV2SLS for the GMM/IV step (one-step 2SLS with a
-  robust covariance).
-- Uses pandas for data wrangling; joins are handled with standard merges.
-- Does not execute the commented-out ACF block from the Stata code.
-
-Usage (example):
-    python Estimate_Coefficients.py \
-        --data-root /Users/.../RisingPricesRisingMarkupsReplication \
-        --include-interest-cogs 0 \
-        --drop-missing-sga 0
-
-Expected inputs (relative to ``data_root``):
-- Intermediate/data_main_upd_trim_1.dta (or *_intExp.dta if including interest)
-- rawData/deu_observations.dta (only if drop_missing_sga == 1)
-
-Outputs are written to ``Intermediate/`` mirroring the Stata filenames.
+Includes the Create_Data and Estimate_Coefficients logic inline so nothing
+else needs to be imported. It builds the trimmed Compustat panel, estimates
+production-function elasticities, and writes theta outputs to Intermediate/.
 """
 
 from __future__ import annotations
@@ -36,29 +17,148 @@ import numpy as np
 import pandas as pd
 from linearmodels.iv import IV2SLS
 
+from path_plot_config import data_dir, int_dir
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOGGER = logging.getLogger(__name__)
 
 
-# -------------------------------------------------------------------------------------------------
-# Data helpers
-# -------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------
+# Create Data
+# --------------------------------------------------------------------------------------
+
+def _prep_industry_codes(df: pd.DataFrame) -> pd.DataFrame:
+    for digits in (2, 3, 4):
+        col = f"ind{digits}d"
+        df[col] = pd.to_numeric(df["naics"].str.slice(0, digits), errors="coerce")
+    return df
+
+
+def _trim_sale_cogs_ratio(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["s_g"] = df["sale"] / df["cogs"]
+    p1 = df.groupby("year")["s_g"].transform(lambda x: x.quantile(0.01))
+    p99 = df.groupby("year")["s_g"].transform(lambda x: x.quantile(0.99))
+    trimmed = df[(df["s_g"] > p1) & (df["s_g"] < p99)]
+    return trimmed.drop(columns=["s_g"])
+
+
+def _load_macro(path: Path) -> pd.DataFrame:
+    macro = pd.read_excel(path)
+    macro.columns = macro.columns.str.strip()
+    if not {"year", "USGDP", "usercost"}.issubset(macro.columns):
+        raise ValueError("macro_vars_new.xlsx must contain year, USGDP, and usercost columns.")
+    return macro[["year", "USGDP", "usercost"]]
+
+
+def create_data(
+    include_interest_cogs: bool,
+    compustat_path: Optional[Path] = None,
+    macro_path: Optional[Path] = None,
+) -> Path:
+    compustat_path = compustat_path or data_dir / "DLEU" / "Compustat_annual.dta"
+    macro_path = macro_path or data_dir / "DLEU" / "macro_vars_new.xlsx"
+
+    if not compustat_path.exists():
+        raise FileNotFoundError(f"Compustat file not found: {compustat_path}")
+    if not macro_path.exists():
+        raise FileNotFoundError(f"Macro variable file not found: {macro_path}")
+
+    LOGGER.info("Loading Compustat from %s", compustat_path)
+    df = pd.read_stata(compustat_path)
+    df = df[df["fyear"] > 1954].copy()
+    df = df.rename(columns={"fyear": "year"})
+    df = df.sort_values(["gvkey", "year"])
+
+    df["nrobs"] = df.groupby(["gvkey", "year"])["year"].transform("size")
+    df = df[~(((df["nrobs"] == 2) | (df["nrobs"] == 3)) & (df["indfmt"] == "FS"))]
+    df = df.drop_duplicates(subset=["gvkey", "year"])
+    df = df[df["naics"].notna() & (df["naics"] != "")]
+    df = _prep_industry_codes(df)
+    # Group codes mirroring Stata's egen group(ind2d)
+    df["nrind2"] = df["ind2d"].astype("category").cat.codes + 1
+    df["nrind3"] = df["ind3d"].astype("category").cat.codes + 1
+    df["nrind4"] = df["ind4d"].astype("category").cat.codes + 1
+
+    df["tie"] = df["tie"].fillna(0)
+    keep_cols = [
+        "gvkey",
+        "year",
+        "naics",
+        "ind2d",
+        "ind3d",
+        "ind4d",
+        "sale",
+        "cogs",
+        "xsga",
+        "xlr",
+        "xrd",
+        "xad",
+        "dvt",
+        "ppegt",
+        "intan",
+        "emp",
+        "mkvalt",
+        "conm",
+        "tie",
+    ]
+    df = df[keep_cols]
+
+    df["sale"] *= 1000
+    df["xlr"] *= 1000
+    if include_interest_cogs:
+        df["cogs"] = (df["cogs"] + df["tie"]) * 1000
+    else:
+        df["cogs"] *= 1000
+    df["xsga"] *= 1000
+    df["mkvalt"] *= 1000
+    df["dvt"] *= 1000
+    df["ppegt"] *= 1000
+    df["intan"] *= 1000
+
+    macro = _load_macro(macro_path)
+    df = df.merge(macro, on="year", how="inner", validate="m:1")
+
+    df["sale_D"] = (df["sale"] / df["USGDP"]) * 100
+    df["cogs_D"] = (df["cogs"] / df["USGDP"]) * 100
+    df["xsga_D"] = (df["xsga"] / df["USGDP"]) * 100
+    df["mkvalt_D"] = (df["mkvalt"] / df["USGDP"]) * 100
+    df["dividend_D"] = (df["dvt"] / df["USGDP"]) * 100
+    df["capital_D"] = (df["ppegt"] / df["USGDP"]) * 100
+    df["intan_D"] = (df["intan"] / df["USGDP"]) * 100
+    df["xlr_D"] = (df["xlr"] / df["USGDP"]) * 100
+    df["kexp"] = df["usercost"] * df["capital_D"]
+
+    df = df[df["sale_D"] >= 0]
+    df = df[df["cogs_D"] >= 0]
+    df = df[df["sale_D"] != 0]
+    df = df[df["cogs_D"] != 0]
+    df = df[df["sale_D"].notna() & df["cogs_D"].notna()]
+    df = df[df["year"] > 1949]
+    df = _trim_sale_cogs_ratio(df)
+
+    df["xsga"] = df["xsga"].replace({0: np.nan})
+    df = df[df["xsga"].isna() | (df["xsga"] >= 0)]
+
+    out_path = int_dir / ("data_main_upd_trim_1_intExp.dta" if include_interest_cogs else "data_main_upd_trim_1.dta")
+    int_dir.mkdir(parents=True, exist_ok=True)
+    df.to_stata(out_path, write_index=False)
+    LOGGER.info("Saved %s", out_path)
+    return out_path
+
+
+# --------------------------------------------------------------------------------------
+# Estimate Coefficients
+# --------------------------------------------------------------------------------------
 
 def load_main_data(data_root: Path, include_interest_cogs: bool) -> pd.DataFrame:
-    """Load the main trimmed Compustat panel with or without interest in COGS."""
-    fname = (
-        "data_main_upd_trim_1_intExp.dta"
-        if include_interest_cogs
-        else "data_main_upd_trim_1.dta"
-    )
+    fname = "data_main_upd_trim_1_intExp.dta" if include_interest_cogs else "data_main_upd_trim_1.dta"
     path = data_root / "Intermediate" / fname
     LOGGER.info("Loading %s", path)
     return pd.read_stata(path)
 
 
 def add_lags(df: pd.DataFrame, group: str, time: str, cols: Iterable[str]) -> pd.DataFrame:
-    """Add L.col lags by group/time."""
     df = df.copy()
     df = df.sort_values([group, time])
     for col in cols:
@@ -67,28 +167,13 @@ def add_lags(df: pd.DataFrame, group: str, time: str, cols: Iterable[str]) -> pd
 
 
 def safe_log(series: pd.Series) -> pd.Series:
-    """Natural log that returns NaN for nonpositive inputs."""
     return np.where(series > 0, np.log(series), np.nan)
 
 
-# -------------------------------------------------------------------------------------------------
-# IV estimation
-# -------------------------------------------------------------------------------------------------
-
-def run_iv(
-    df: pd.DataFrame,
-    dep: str,
-    endog: str,
-    exog: Iterable[str],
-    instruments: Iterable[str],
-) -> Optional[Dict[str, float]]:
-    """
-    Run a one-step IV/2SLS regression, returning coefficients of interest.
-    Returns None if the regression cannot be estimated.
-    """
+def run_iv(df: pd.DataFrame, dep: str, endog: str, exog: Iterable[str], instruments: Iterable[str]) -> Optional[Dict[str, float]]:
     cols_needed = [dep, endog, *exog, *instruments]
     work = df[cols_needed].dropna()
-    if work.shape[0] < 5:  # too few observations to be meaningful
+    if work.shape[0] < 5:
         return None
     try:
         model = IV2SLS(
@@ -105,20 +190,7 @@ def run_iv(
 
 
 def estimate_window_coeffs(df: pd.DataFrame) -> Tuple[Optional[Dict[str, float]], Optional[Dict[str, float]]]:
-    """
-    Estimate both specs (without and with SG&A) for a given window subset.
-    Returns (spec1_coefs, spec2_coefs), each dict or None.
-    """
-    # Spec 1: y = b_c * c + b_k * k, instrument c with L.c, controls L.i, L.k2, L.k
-    spec1 = run_iv(
-        df,
-        dep="r",
-        endog="c",
-        exog=["k", "L.i", "L.k2", "L.k"],
-        instruments=["L.c"],
-    )
-
-    # Spec 2: add SG&A (lsga) and its polynomial terms as in the Stata code
+    spec1 = run_iv(df, dep="r", endog="c", exog=["k", "L.i", "L.k2", "L.k"], instruments=["L.c"])
     spec2 = run_iv(
         df,
         dep="r",
@@ -129,19 +201,8 @@ def estimate_window_coeffs(df: pd.DataFrame) -> Tuple[Optional[Dict[str, float]]
     return spec1, spec2
 
 
-# -------------------------------------------------------------------------------------------------
-# Main estimation flow (mirrors the .do logic)
-# -------------------------------------------------------------------------------------------------
-
-def preprocess(
-    df: pd.DataFrame,
-    drop_missing_sga: bool,
-    data_root: Path,
-) -> pd.DataFrame:
-    """Match the trimming and lag construction from the Stata code."""
+def preprocess(df: pd.DataFrame, drop_missing_sga: bool, data_root: Path) -> pd.DataFrame:
     df = df.copy()
-
-    # Cost shares
     df["costshare1"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
     df["costshare2"] = df["cogs_D"] / (df["cogs_D"] + df["xsga_D"] + df["kexp"])
 
@@ -166,29 +227,23 @@ def preprocess(
         df["s_g2"] = df["xsga"] / df["sale"]
         p1 = df.groupby("year")["s_g2"].transform(lambda x: x.quantile(0.01))
         p99 = df.groupby("year")["s_g2"].transform(lambda x: x.quantile(0.99))
-        df = df[
-            (~df["s_g2"].notna())
-            | ((df["s_g2"] >= p1) & (df["s_g2"] <= p99))
-        ]
+        df = df[(df["s_g2"] >= p1) | df["s_g2"].isna()]
+        df = df[(df["s_g2"] <= p99) | df["s_g2"].isna()]
         df = df.drop(columns=["s_g2"])
 
-    # Firm id
     df["id"] = df["gvkey"].astype("category").cat.codes
     df = df[df["id"].notna()]
 
-    # Core variables
     df["r"] = np.log(df["sale_D"])
     df["y"] = df["r"]
     df["c"] = np.log(df["cogs_D"])
     df["c2"] = df["c"] ** 2
     df["c3"] = df["c"] ** 3
-
     df["k"] = np.log(df["capital_D"])
     df["k2"] = df["k"] ** 2
     df["ck"] = df["c"] * df["k"]
     df["k3"] = df["k"] ** 3
     df["depr"] = 0.1
-
     df["lsga"] = safe_log(df["xsga_D"])
     df["lsga2"] = df["lsga"] ** 2
 
@@ -206,7 +261,6 @@ def preprocess(
 
 
 def build_result_frame(df: pd.DataFrame) -> pd.DataFrame:
-    """Create the container for rolling-window coefficients."""
     res = df[["ind2d", "year"]].drop_duplicates().copy()
     for col in ["theta_WI1_ct", "theta_WI2_ct", "theta_WI2_xt", "theta_WI1_kt", "theta_WI2_kt"]:
         res[col] = np.nan
@@ -214,7 +268,6 @@ def build_result_frame(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def assign_coeffs(res: pd.DataFrame, cond: pd.Series, spec1: Optional[Dict[str, float]], spec2: Optional[Dict[str, float]]) -> None:
-    """Assign estimated coefficients to the result frame under the provided condition."""
     if spec1:
         if "c" in spec1:
             res.loc[cond, "theta_WI1_ct"] = spec1["c"]
@@ -230,16 +283,13 @@ def assign_coeffs(res: pd.DataFrame, cond: pd.Series, spec1: Optional[Dict[str, 
 
 
 def run_rolling_windows(df: pd.DataFrame) -> pd.DataFrame:
-    """Replicate the rolling-window estimation and assignment logic."""
     res = build_result_frame(df)
 
-    # Helper to subset and estimate
     def estimate_for_subset(subset: pd.DataFrame, assign_mask: pd.Series) -> None:
         spec1, spec2 = estimate_window_coeffs(subset)
         if spec1 or spec2:
             assign_coeffs(res, assign_mask, spec1, spec2)
 
-    # Early windows: industries 1-16, 18-25, and special industry 17
     for s in range(1, 17):
         subset = df[(df["nrind2"] == s) & (df["year"] < 1972) & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)]
         if subset.shape[0] > 15:
@@ -257,7 +307,6 @@ def run_rolling_windows(df: pd.DataFrame) -> pd.DataFrame:
         mask = (res["ind2d"] == 17) & (res["year"] < 1985)
         estimate_for_subset(subset_17, mask)
 
-    # Rolling windows by year
     for t in range(1970, 2025):
         window_mask = (df["year"] >= t - 2) & (df["year"] <= t + 2)
 
@@ -295,32 +344,21 @@ def run_rolling_windows(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def theta_suffix(include_interest_cogs: bool, drop_missing_sga: bool) -> str:
-    """Build the suffix used for theta output files."""
     suffix = "DEUSample" if drop_missing_sga else "fullSample"
     if include_interest_cogs:
         suffix += "_intExp"
     return suffix
 
 
-def save_theta_outputs(
-    res: pd.DataFrame,
-    df: pd.DataFrame,
-    data_root: Path,
-    include_interest_cogs: bool,
-    drop_missing_sga: bool,
-) -> None:
-    """Persist theta_W* and theta_c* outputs to the Intermediate folder."""
+def save_theta_outputs(res: pd.DataFrame, df: pd.DataFrame, data_root: Path, include_interest_cogs: bool, drop_missing_sga: bool) -> None:
     interm = data_root / "Intermediate"
     interm.mkdir(parents=True, exist_ok=True)
-
     suffix = theta_suffix(include_interest_cogs, drop_missing_sga)
 
-    # theta_W rolling outputs
     out_w = interm / f"theta_W_s_window_{suffix}.dta"
     res.sort_values(["ind2d", "year"]).to_stata(out_w, write_index=False)
     LOGGER.info("Saved %s", out_w)
 
-    # Cost-share output elasticity estimates (medians)
     cs = df.copy()
     cs["cs2d"] = cs.groupby(["year", "ind2d"])["costshare1"].transform("median")
     cs["cs3d"] = cs.groupby(["year", "ind3d"])["costshare1"].transform("median")
@@ -332,26 +370,7 @@ def save_theta_outputs(
     LOGGER.info("Saved %s", out_c)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Estimate production-function elasticities (Python port of Estimate_Coefficients.do).")
-    parser.add_argument("--data-root", type=Path, required=True, help="Path to RisingPricesRisingMarkupsReplication directory (contains Intermediate/, rawData/, etc.)")
-    parser.add_argument("--include-interest-cogs", type=int, choices=[0, 1], default=0, help="Match Stata flag includeinterestcogs.")
-    parser.add_argument("--drop-missing-sga", type=int, choices=[0, 1], default=0, help="Match Stata flag dropmissingsga.")
-    args = parser.parse_args()
-
-    estimate_coefficients(
-        data_root=args.data_root,
-        include_interest_cogs=bool(args.include_interest_cogs),
-        drop_missing_sga=bool(args.drop_missing_sga),
-    )
-
-
-def estimate_coefficients(
-    data_root: Path,
-    include_interest_cogs: bool = False,
-    drop_missing_sga: bool = False,
-) -> None:
-    """Run the full estimation flow programmatically."""
+def estimate_coefficients(data_root: Path, include_interest_cogs: bool = False, drop_missing_sga: bool = False) -> None:
     df = load_main_data(data_root, include_interest_cogs=include_interest_cogs)
     df = preprocess(df, drop_missing_sga=drop_missing_sga, data_root=data_root)
     res = run_rolling_windows(df)
@@ -364,5 +383,50 @@ def estimate_coefficients(
     )
 
 
+# --------------------------------------------------------------------------------------
+# CLI glue
+# --------------------------------------------------------------------------------------
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Python replacement for 0.3 theta_estimation.do (fully inlined).")
+    parser.add_argument("--data-root", type=Path, default=None, help="Project root containing Input/ and Intermediate/.")
+    parser.add_argument("--include-interest-cogs", type=int, choices=[0, 1], default=0, help="Match Stata flag includeinterestcogs.")
+    parser.add_argument("--drop-missing-sga", type=int, choices=[0, 1], default=0, help="Match Stata flag dropmissingsga.")
+    parser.add_argument("--compustat-path", type=Path, default=None, help="Optional override for Compustat_annual.dta")
+    parser.add_argument("--macro-path", type=Path, default=None, help="Optional override for macro_vars_new.xlsx")
+    return parser.parse_args()
+
+
+def main(
+    data_root: Optional[Path] = None,
+    include_interest_cogs: bool = False,
+    drop_missing_sga: bool = False,
+    compustat_path: Optional[Path] = None,
+    macro_path: Optional[Path] = None,
+) -> None:
+    root = data_root or Path(__file__).resolve().parents[2]
+
+    LOGGER.info("Running Create_Data include_interest_cogs=%s", int(include_interest_cogs))
+    create_data(
+        include_interest_cogs=include_interest_cogs,
+        compustat_path=compustat_path,
+        macro_path=macro_path,
+    )
+
+    LOGGER.info("Estimating theta coefficients (drop_missing_sga=%s)", int(drop_missing_sga))
+    estimate_coefficients(
+        data_root=root,
+        include_interest_cogs=include_interest_cogs,
+        drop_missing_sga=drop_missing_sga,
+    )
+
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(
+        data_root=args.data_root,
+        include_interest_cogs=bool(args.include_interest_cogs),
+        drop_missing_sga=bool(args.drop_missing_sga),
+        compustat_path=args.compustat_path,
+        macro_path=args.macro_path,
+    )

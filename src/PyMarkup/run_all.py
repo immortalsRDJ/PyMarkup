@@ -1,4 +1,3 @@
-import subprocess
 import runpy
 import pathlib
 
@@ -26,20 +25,14 @@ print("PPI data is successfully organized.\n")
 
 
 ## Step 1. Theta Estimation ----------------------------------------------------------------- #
-dofile_theta = 'your-path/RisingPricesRisingMarkupsReplication/Code/0.3 theta_estimation.do' # need to change the path!
-#cmd_theta = ["/Applications/Stata/StataBE.app/Contents/MacOS/StataBE", "do", dofile_theta]  # use for MacOS
-cmd_theta = ["C:/Program Files/Stata17/StataBE-64", "do", dofile_theta] # use for Windows
-print("Running theta estimation...\n")
-subprocess.call(cmd_theta)
+print("Running theta estimation (Python)...\n")
+runpy.run_path(path_name = code_dir / "0.3 theta_estimation.py")
 print("Theta estimation completed.\n")
 
 
 ## Step 2. Create Main Datasets (Compustat + PPI + CPI) ------------------------------------- #
-dofile = 'your-path/RisingPricesRisingMarkupsReplication/Code/0.4 Create Main Datasets.do' # need to change the path!
-#cmd = ["/Applications/Stata/StataBE.app/Contents/MacOS/StataBE", "do", dofile]      # apply this line if you are using MacOS
-cmd = ["C:/Program Files/Stata17/StataBE-64", "do", dofile] # apply this line if you are using Windows system
-print("Creating main datasets...\n")
-subprocess.call(cmd)
+print("Creating main datasets (Python)...\n")
+runpy.run_path(path_name = code_dir / "0.4 Create Main Datasets.py")
 print("Main datasets have been created.\n")
 
 
