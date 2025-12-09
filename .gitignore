@@ -203,3 +203,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project data directories (large binaries not tracked in git)
+Input/
+Intermediate/
+Output/
