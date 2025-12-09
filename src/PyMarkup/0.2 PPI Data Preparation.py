@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------
-Converts BLS 'pc.data.0.Current.txt' into quarterly
+Automatically download and converts BLS 'pc.data.0.Current.txt' into quarterly
 and annual PPI datasets.
 
 Rules:
@@ -9,18 +9,14 @@ Rules:
     - Annual data: use December (M12) only
 
 Inputs:
-    {data_dir}/PPI/pc.data.0.Current.txt
     {data_dir}/PPI/PPI_quarterly_old.csv
-    {data_dir}/PPI/PPI_annual_old.csv
+    {data_dir}/PPI/PPI_annual_old.csv # contains previous data (1980s) to be merged
 
 Outputs (updated/merged):
     {data_dir}/PPI/PPI_quarterly.csv
     {data_dir}/PPI/PPI_annual.csv
 --------------------------------------------------
 """
-
-#!/usr/bin/env python3
-
 import os
 
 import pandas as pd

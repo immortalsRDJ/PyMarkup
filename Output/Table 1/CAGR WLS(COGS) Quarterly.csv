@@ -1,0 +1,13 @@
+,Industry,Estimate,St.Err,R2,N_obs,Share matched (revenue)
+0,Accommodation and Food Services,-0.0256,0.0512,0.0073,36.0,0.2179
+3,All sectors,0.0358,0.0118,0.0026,3541.0,0.7022
+4,All sectors with FE,0.0395,0.0117,0.0032,3541.0,0.7022
+8,Finance and Insurance,-0.0729,0.0322,0.0692,71.0,0.784
+9,Health Care and Social Assistance,-0.0213,0.0371,0.0062,55.0,0.4552
+10,Information,-0.0411,0.018,0.0095,544.0,0.6531
+11,Manufacturing,-0.2097,0.0311,0.0228,1948.0,0.9793
+12,"Mining, Quarrying, and Oil and Gas Extraction",0.1914,0.018,0.2279,384.0,0.9036
+14,"Professional, Scientific, and Technical Services",-0.0055,0.0383,0.0007,31.0,0.1919
+15,Real Estate and Rental and Leasing,0.0449,0.0121,0.1386,87.0,0.6748
+16,Retail Trade,0.1074,0.0228,0.1206,164.0,0.3289
+18,Transportation and Warehousing,0.0127,0.0348,0.0009,147.0,0.8121

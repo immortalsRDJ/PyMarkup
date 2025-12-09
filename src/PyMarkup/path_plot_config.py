@@ -5,9 +5,10 @@ import os
 
 
 # File Directories
-proj_dir = pathlib.Path.cwd().parent
+# Derive project root from this file location so scripts work from anywhere.
+proj_dir = pathlib.Path(__file__).resolve().parents[2]
+code_dir = proj_dir / 'src' / 'PyMarkup'
 data_dir = proj_dir / 'Input'
-code_dir = proj_dir / 'Code'
 int_dir = proj_dir / 'Intermediate'
 out_dir = proj_dir / 'Output'
 
