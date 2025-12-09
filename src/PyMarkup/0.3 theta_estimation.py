@@ -15,6 +15,8 @@ from typing import Dict, Iterable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import scipy.optimize
+import statsmodels.api as sm
 from linearmodels.iv import IV2SLS
 
 from path_plot_config import data_dir, int_dir
@@ -128,6 +130,13 @@ def create_data(
     df["intan_D"] = (df["intan"] / df["USGDP"]) * 100
     df["xlr_D"] = (df["xlr"] / df["USGDP"]) * 100
     df["kexp"] = df["usercost"] * df["capital_D"]
+    # Market shares for OP/ACF
+    df["totsales2d"] = df.groupby(["ind2d", "year"])["sale_D"].transform("sum")
+    df["totsales3d"] = df.groupby(["ind3d", "year"])["sale_D"].transform("sum")
+    df["totsales4d"] = df.groupby(["ind4d", "year"])["sale_D"].transform("sum")
+    df["ms2d"] = df["sale_D"] / df["totsales2d"]
+    df["ms3d"] = df["sale_D"] / df["totsales3d"]
+    df["ms4d"] = df["sale_D"] / df["totsales4d"]
 
     df = df[df["sale_D"] >= 0]
     df = df[df["cogs_D"] >= 0]
@@ -201,6 +210,54 @@ def estimate_window_coeffs(df: pd.DataFrame) -> Tuple[Optional[Dict[str, float]]
     return spec1, spec2
 
 
+# -------------------------------------------------------------------------------------------------
+# OP/ACF estimator helpers
+# -------------------------------------------------------------------------------------------------
+
+def _gmm_objective(betas: np.ndarray, phi: np.ndarray, phi_lag: np.ndarray, Z: np.ndarray, X: np.ndarray, X_lag: np.ndarray) -> float:
+    omega = phi - X @ betas
+    omega_lag = phi_lag - X_lag @ betas
+    omega_lag_pol = np.column_stack([np.ones_like(omega_lag), omega_lag])
+    g_b = np.linalg.pinv(omega_lag_pol.T @ omega_lag_pol) @ omega_lag_pol.T @ omega
+    xi = omega - omega_lag_pol @ g_b
+    moment = Z.T @ xi
+    return float(moment.T @ moment)
+
+
+def estimate_acf_window(df: pd.DataFrame) -> Optional[Dict[str, float]]:
+    """ACF-style GMM following the BMYReplication implementation."""
+    phi_reg_cols = ["c", "c2", "k", "k2", "ck", "ms2d", "ms4d"]
+    year_dummies = pd.get_dummies(df["year"], prefix="year")
+    X_phi = pd.concat([df[phi_reg_cols], year_dummies], axis=1)
+    X_phi = sm.add_constant(X_phi)
+    y_phi = df["y"]
+    if y_phi.dropna().shape[0] < len(phi_reg_cols) + 5:
+        return None
+
+    phi_model = sm.OLS(y_phi, X_phi, missing="drop").fit()
+    df = df.copy()
+    df["phi"] = phi_model.fittedvalues
+    df["phi_lag"] = df.groupby("id")["phi"].shift(1)
+
+    work = df.dropna(subset=["phi", "phi_lag", "c", "k", "c_lag", "k_lag"])
+    if work.empty:
+        return None
+
+    PHI = work["phi"].to_numpy()
+    PHI_LAG = work["phi_lag"].to_numpy()
+    X = np.column_stack([np.ones(len(work)), work["c"], work["k"]])
+    X_lag = np.column_stack([np.ones(len(work)), work["c_lag"], work["k_lag"]])
+    Z = np.column_stack([np.ones(len(work)), work["c_lag"], work["k"]])
+
+    def objective(betas: np.ndarray) -> float:
+        return _gmm_objective(betas, PHI, PHI_LAG, Z, X, X_lag)
+
+    res = scipy.optimize.minimize(objective, x0=np.array([0.0, 0.9, 0.1]), method="Nelder-Mead")
+    if not res.success:
+        return None
+    return {"theta_c": res.x[1], "theta_k": res.x[2]}
+
+
 def preprocess(df: pd.DataFrame, drop_missing_sga: bool, data_root: Path) -> pd.DataFrame:
     df = df.copy()
     df["costshare1"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
@@ -256,6 +313,10 @@ def preprocess(df: pd.DataFrame, drop_missing_sga: bool, data_root: Path) -> pd.
     df["i2"] = df["i"] ** 2
     df["i3"] = df["i"] ** 3
     df["ik"] = df["i"] * df["k"]
+
+    # Convenience lags for OP/ACF routine
+    df["c_lag"] = df["L.c"]
+    df["k_lag"] = df["L.k"]
 
     return df
 
@@ -343,6 +404,22 @@ def run_rolling_windows(df: pd.DataFrame) -> pd.DataFrame:
     return res
 
 
+def run_acf_windows(df: pd.DataFrame) -> pd.DataFrame:
+    """Run ACF estimation on rolling 5-year windows by 2-digit industry."""
+    records = []
+    sectors = sorted(df["nrind2"].dropna().unique())
+    years = sorted(df["year"].dropna().unique())
+    for sector in sectors:
+        sector_df = df[df["nrind2"] == sector]
+        for year in years:
+            mask = (sector_df["year"] >= year - 2) & (sector_df["year"] <= year + 2)
+            window_df = sector_df[mask]
+            acf_res = estimate_acf_window(window_df)
+            if acf_res:
+                records.append({"ind2d": sector, "year": year, "theta_acf": acf_res["theta_c"]})
+    return pd.DataFrame(records)
+
+
 def theta_suffix(include_interest_cogs: bool, drop_missing_sga: bool) -> str:
     suffix = "DEUSample" if drop_missing_sga else "fullSample"
     if include_interest_cogs:
@@ -370,13 +447,32 @@ def save_theta_outputs(res: pd.DataFrame, df: pd.DataFrame, data_root: Path, inc
     LOGGER.info("Saved %s", out_c)
 
 
+def save_theta_acf(acf_df: pd.DataFrame, data_root: Path, include_interest_cogs: bool, drop_missing_sga: bool) -> None:
+    if acf_df.empty:
+        LOGGER.warning("No ACF estimates were generated; skipping theta_acf output.")
+        return
+    interm = data_root / "Intermediate"
+    interm.mkdir(parents=True, exist_ok=True)
+    suffix = theta_suffix(include_interest_cogs, drop_missing_sga)
+    out_acf = interm / f"theta_acf_{suffix}.dta"
+    acf_df.to_stata(out_acf, write_index=False)
+    LOGGER.info("Saved %s", out_acf)
+
+
 def estimate_coefficients(data_root: Path, include_interest_cogs: bool = False, drop_missing_sga: bool = False) -> None:
     df = load_main_data(data_root, include_interest_cogs=include_interest_cogs)
     df = preprocess(df, drop_missing_sga=drop_missing_sga, data_root=data_root)
     res = run_rolling_windows(df)
+    acf_df = run_acf_windows(df)
     save_theta_outputs(
         res=res,
         df=df,
+        data_root=data_root,
+        include_interest_cogs=include_interest_cogs,
+        drop_missing_sga=drop_missing_sga,
+    )
+    save_theta_acf(
+        acf_df=acf_df,
         data_root=data_root,
         include_interest_cogs=include_interest_cogs,
         drop_missing_sga=drop_missing_sga,

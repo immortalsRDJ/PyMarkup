@@ -10,3 +10,4 @@ seaborn>=0.12.2
 sklearn>=0.0.post1
 statsmodels>=0.13.5
 scipy>=1.9.3
+linearmodels>=5.1

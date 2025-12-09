@@ -208,3 +208,7 @@ __marimo__/
 Input/
 Intermediate/
 Output/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store

@@ -12,5 +12,5 @@ Code/
 
 **Python-first workflow (Benkard–Miller–Yurukoglu, 2025)**
 
-- `0.3 theta_estimation.py`: self-contained; builds the trimmed Compustat panel and estimates theta outputs into `Intermediate/`.
+- `0.3 theta_estimation.py`: self-contained; builds the trimmed Compustat panel and estimates theta outputs into `Intermediate/` (IV/GMM and OP/ACF).
 - `0.4 Create Main Datasets.py`: merges Compustat with CPI/PPI/NAICS descriptors and computes firm-level markups for the plotting scripts.

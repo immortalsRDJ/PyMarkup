@@ -1,8 +1,5 @@
 import runpy
-import pathlib
-
-# Set working directory
-code_dir = pathlib.Path.cwd()
+from path_plot_config import code_dir
 
 
 ## Step 0. Download Datasets ---------------------------------------------------------------- #
@@ -17,11 +14,10 @@ print("Downloading CPI data...\n")
 runpy.run_path(path_name = code_dir / "0.1 Download CPI.py")
 print("CPI data is successfully downloaded.\n")
 
-# 3. PPI (manually downloaded from BLS)
-# NOTE: download the raw PPI files from BLS before running this organizer.
+# 3. PPI (from BLS)
 print("Organizing PPI data...\n")
 runpy.run_path(path_name = code_dir / "0.2 PPI Data Preparation.py")
-print("PPI data is successfully organized.\n")
+print("PPI data is successfully downloaded and organized.\n")
 
 
 ## Step 1. Theta Estimation ----------------------------------------------------------------- #

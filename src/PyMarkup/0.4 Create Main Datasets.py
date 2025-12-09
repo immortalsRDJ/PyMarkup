@@ -64,38 +64,50 @@ def _apply_costshare_trim(df: pd.DataFrame, time_col: str) -> pd.DataFrame:
     return df
 
 
-def _attach_theta(df: pd.DataFrame, theta_path: Path) -> pd.DataFrame:
-    if not theta_path.exists():
-        raise FileNotFoundError(f"Missing theta file {theta_path}. Run 0.3 theta_estimation.py first.")
-    theta = pd.read_stata(theta_path)
+def _attach_theta(df: pd.DataFrame, theta_w_path: Path, theta_acf_path: Path) -> pd.DataFrame:
+    if not theta_w_path.exists():
+        raise FileNotFoundError(f"Missing theta file {theta_w_path}. Run 0.3 theta_estimation.py first.")
+    theta = pd.read_stata(theta_w_path)
     theta.columns = theta.columns.str.lower()
     theta = theta.rename(columns={"theta_wi1_ct": "theta_WI1_ct"})
-    return df.merge(theta[["ind2d", "year", "theta_WI1_ct"]], on=["ind2d", "year"], how="left")
+    df = df.merge(theta[["ind2d", "year", "theta_WI1_ct"]], on=["ind2d", "year"], how="left")
+
+    if theta_acf_path.exists():
+        theta_acf = pd.read_stata(theta_acf_path)
+        theta_acf.columns = theta_acf.columns.str.lower()
+        theta_acf = theta_acf.rename(columns={"theta_acf": "theta_acf_val"})
+        df = df.merge(theta_acf[["ind2d", "year", "theta_acf_val"]], on=["ind2d", "year"], how="left")
+    else:
+        LOGGER.warning("theta_acf file missing (%s); OP/ACF markups will be NaN.", theta_acf_path)
+        df["theta_acf_val"] = np.nan
+    return df
 
 
 def _compute_mu(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["mu_10"] = df["theta_WI1_ct"] * (df["sale_D"] / df["cogs_D"])
+    df["mu_12"] = df["theta_acf_val"] * (df["sale_D"] / df["cogs_D"])
     return df
 
 
-def _aggregate_markup(df: pd.DataFrame, time_col: str) -> pd.DataFrame:
+def _aggregate_markup(df: pd.DataFrame, time_col: str, markup_col: str = "mu_10") -> pd.DataFrame:
     df = df.copy()
     df["TOTSALES"] = df.groupby(time_col)["sale_D"].transform("sum")
     df["share_firm_agg"] = df["sale_D"] / df["TOTSALES"]
     agg = (
         df.groupby(time_col)
-        .apply(lambda g: np.sum(g["share_firm_agg"] * g["mu_10"]))
+        .apply(lambda g: np.sum(g["share_firm_agg"] * g[markup_col].fillna(0)))
         .reset_index(name="MARKUP_spec1")
     )
     return agg
 
 
-def _save_for_figure1(df: pd.DataFrame, limited: bool, out_dir: Path) -> None:
+def _save_for_figure1(df: pd.DataFrame, limited: bool, out_dir: Path, markup_col: str = "mu_10", label: str = "") -> None:
     filtered = df if not limited else df[df["ppi"].notna()]
-    agg = _aggregate_markup(filtered, "year")
+    agg = _aggregate_markup(filtered, "year", markup_col=markup_col)
     out_dir.mkdir(parents=True, exist_ok=True)
-    fname = "agg_markup_limited_to_PPI matched_annual.csv" if limited else "agg_markup_annual.csv"
+    suffix = f"_{label}" if label else ""
+    fname = ("agg_markup_limited_to_PPI matched_annual" + suffix + ".csv") if limited else ("agg_markup_annual" + suffix + ".csv")
     agg.to_csv(out_dir / fname, index=False)
     LOGGER.info("Saved %s", out_dir / fname)
 
@@ -122,20 +134,26 @@ def prepare_annual(data_root: Path, include_interest_cogs: bool, drop_missing_sg
     df = df[df["year"] >= 1955]
     df = df[df["ind2d"] != 99]
 
-    theta_path = data_root / "Intermediate" / f"theta_W_s_window_{theta_suffix(include_interest_cogs, drop_missing_sga)}.dta"
-    df = _attach_theta(df, theta_path)
+    suffix = theta_suffix(include_interest_cogs, drop_missing_sga)
+    theta_w_path = data_root / "Intermediate" / f"theta_W_s_window_{suffix}.dta"
+    theta_acf_path = data_root / "Intermediate" / f"theta_acf_{suffix}.dta"
+    df = _attach_theta(df, theta_w_path, theta_acf_path)
     df = _compute_mu(df)
 
-    df = df.rename(columns={"mu_10": "firm_level_markup"})
+    df = df.rename(columns={"mu_10": "firm_level_markup", "mu_12": "firm_level_markup_acf"})
     annual_out = df[
-        ["gvkey", "conm", "year", "naics", "ind2d", "ind2d_definition", "firm_level_markup", "sale", "sale_D", "cogs", "cogs_D", "ppi", "cpi"]
+        ["gvkey", "conm", "year", "naics", "ind2d", "ind2d_definition", "firm_level_markup", "firm_level_markup_acf", "sale", "sale_D", "cogs", "cogs_D", "ppi", "cpi"]
     ].copy()
     int_dir.mkdir(parents=True, exist_ok=True)
     annual_out.to_csv(int_dir / "main_annual.csv", index=False)
     LOGGER.info("Saved %s", int_dir / "main_annual.csv")
 
-    _save_for_figure1(df, limited=False, out_dir=data_root / "Intermediate" / "For Figure 1")
-    _save_for_figure1(df, limited=True, out_dir=data_root / "Intermediate" / "For Figure 1")
+    out_dir = data_root / "Intermediate" / "For Figure 1"
+    _save_for_figure1(df, limited=False, out_dir=out_dir, markup_col="mu_10")
+    _save_for_figure1(df, limited=True, out_dir=out_dir, markup_col="mu_10")
+    # Optional OP/ACF aggregate outputs (won't affect plotting)
+    _save_for_figure1(df, limited=False, out_dir=out_dir, markup_col="mu_12", label="op_acf")
+    _save_for_figure1(df, limited=True, out_dir=out_dir, markup_col="mu_12", label="op_acf")
 
 
 def prepare_quarterly(data_root: Path, include_interest_cogs: bool, drop_missing_sga: bool) -> None:
@@ -195,16 +213,18 @@ def prepare_quarterly(data_root: Path, include_interest_cogs: bool, drop_missing
     df = df.drop(columns=["s_g"])
 
     df = _apply_costshare_trim(df, time_col="quarter")
-    theta_path = data_root / "Intermediate" / f"theta_W_s_window_{theta_suffix(include_interest_cogs, drop_missing_sga)}.dta"
-    df = _attach_theta(df, theta_path)
+    suffix = theta_suffix(include_interest_cogs, drop_missing_sga)
+    theta_w_path = data_root / "Intermediate" / f"theta_W_s_window_{suffix}.dta"
+    theta_acf_path = data_root / "Intermediate" / f"theta_acf_{suffix}.dta"
+    df = _attach_theta(df, theta_w_path, theta_acf_path)
     df = _compute_mu(df)
 
     df = df[df["year"] >= 1955]
     df = df[df["ind2d"] != 99]
-    df = df.rename(columns={"mu_10": "firm_level_markup"})
+    df = df.rename(columns={"mu_10": "firm_level_markup", "mu_12": "firm_level_markup_acf"})
 
     quarterly_out = df[
-        ["gvkey", "conm", "year", "quarter", "naics", "ind2d", "ind2d_definition", "firm_level_markup", "saleq", "sale_D", "cogsq", "cogs_D", "ppi", "cpi"]
+        ["gvkey", "conm", "year", "quarter", "naics", "ind2d", "ind2d_definition", "firm_level_markup", "firm_level_markup_acf", "saleq", "sale_D", "cogsq", "cogs_D", "ppi", "cpi"]
     ].copy()
     quarterly_out.to_csv(int_dir / "main_quarterly.csv", index=False)
     LOGGER.info("Saved %s", int_dir / "main_quarterly.csv")
