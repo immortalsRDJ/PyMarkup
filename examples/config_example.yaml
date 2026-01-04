@@ -1,0 +1,34 @@
+# PyMarkup Configuration Example
+# ===============================
+
+# Data paths
+compustat_path: Input/DLEU/Compustat_annual.dta
+macro_vars_path: Input/DLEU/macro_vars_new.xlsx
+
+# Estimation method configuration
+estimator:
+  # Method: "wooldridge_iv", "cost_share", "acf", or "all"
+  method: wooldridge_iv
+
+  # Wooldridge IV settings
+  iv_specification: spec2  # "spec1" (COGS+K) or "spec2" (COGS+K+SGA)
+
+  # Cost share settings
+  cs_include_sga: false
+  cs_aggregation: median  # "median", "mean", or "weighted_mean"
+
+  # ACF settings
+  acf_include_market_share: true
+
+  # Common settings
+  window_years: 5
+  industry_level: 2  # 2, 3, or 4-digit NAICS
+  min_observations: 15
+
+# Data processing
+include_interest_cogs: false
+trim_percentiles: [0.01, 0.99]
+
+# Output
+output_dir: output/
+save_intermediate: true
