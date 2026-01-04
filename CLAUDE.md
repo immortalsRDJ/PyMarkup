@@ -64,7 +64,7 @@ just tag
 The project follows a strict separation between code and data:
 
 - **`src/PyMarkup/`**: Main package with pipeline scripts
-- **`src/BMYReplication/`**: Python translations of original Stata code from Bond-Hashemi-Kaplan replication package
+- **`src/BMYReplication/`**: Python translations of original Stata code
 - **`Input/`**: Raw data (Compustat, CPI, PPI, macro variables) - **not version controlled**
 - **`Intermediate/`**: Generated intermediate datasets (trimmed panels, theta estimates) - **not version controlled**
 - **`Output/`**: Final figures and tables - **not version controlled**
