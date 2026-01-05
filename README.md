@@ -7,10 +7,10 @@
 
 A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery.
 
-* PyPI package: https://pypi.org/project/PyMarkup-estimator/
-* GitHub repository: https://github.com/immortalsRDJ/PyMarkup-estimator
+* PyPI package: https://pypi.org/project/PyMarkup/
+* GitHub repository: https://github.com/immortalsRDJ/PyMarkup
 * Free software: MIT License
-* Documentation: https://PyMarkup-estimator.readthedocs.io
+<!-- * Documentation: https://PyMarkup.readthedocs.io -->
 
 ## Key Features
 
@@ -43,7 +43,7 @@ A Python toolkit for estimating firm-level markups using production function-bas
 pip install PyMarkup-estimator
 ```
 
-**Note:** The package name is `PyMarkup-estimator`, but you import it as `PyMarkup`:
+<!-- **Note:** The package name is `PyMarkup-estimator`, but you import it as `PyMarkup`: -->
 ```python
 from PyMarkup import MarkupPipeline  # Import name stays the same!
 ```
@@ -96,7 +96,71 @@ The `MarkupPipeline` orchestrates a 3-step workflow:
 2. **Elasticity Estimation**: Estimate production function output elasticities (θ) by industry-year using selected method(s)
 3. **Markup Calculation**: Compute firm-level markups as `markup = θ_cogs / cost_share`
 
-## Requirements
+## Data Requirements
+
+PyMarkup requires three external datasets:
+
+### 1. **Compustat** - Firm Financial Data
+- **Source**: WRDS (Wharton Research Data Services)
+- **What**: Annual/quarterly financial statements (sales, COGS, capital, employment)
+- **Requirements**: WRDS institutional account
+- **Size**: ~500MB annual + 1GB quarterly
+
+### 2. **CPI** - Consumer Price Index
+- **Source**: FRED (Federal Reserve Economic Data)
+- **What**: Economy-wide price deflator for converting nominal to real values
+- **Requirements**: Free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html
+- **Size**: ~40KB
+
+### 3. **PPI** - Producer Price Index
+- **Source**: BLS (Bureau of Labor Statistics)
+- **What**: Industry-specific price deflators by NAICS code
+- **Requirements**: Internet connection (browser automation optional)
+- **Size**: ~25MB processed
+
+### Downloading Data
+
+Use the data module to download all required datasets:
+
+```python
+from pathlib import Path
+from PyMarkup.data import download_compustat, download_cpi, download_ppi
+
+# Download Compustat (requires WRDS credentials)
+download_compustat(
+    output_dir=Path("Input/DLEU/"),
+    wrds_username="your_username"
+)
+
+# Download CPI (requires FRED API key)
+download_cpi(
+    output_dir=Path("Input/CPI/"),
+    fred_api_key="your_fred_api_key"
+)
+
+# Download PPI (browser automation)
+download_ppi(
+    output_dir=Path("Input/PPI/"),
+    use_browser=True
+)
+```
+
+**For detailed instructions**, see [DATA_DOWNLOADING_GUIDE.md](DATA_DOWNLOADING_GUIDE.md) which covers:
+- Step-by-step download process for each dataset
+- Data structure and format details
+- Troubleshooting common issues
+- Update schedules and maintenance
+
+### Alternative: Manual Download
+
+You can also use the standalone scripts:
+```bash
+python src/PyMarkup/0.0\ Download\ Compustat.py
+python src/PyMarkup/0.1\ Download\ CPI.py
+python src/PyMarkup/0.2\ PPI\ Data\ Preparation.py
+```
+
+## Python Dependencies
 
 - Python 3.10+
 - pandas, numpy, scipy
