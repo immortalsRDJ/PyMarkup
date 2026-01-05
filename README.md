@@ -1,13 +1,16 @@
-# PyMarkup
+# PyMarkup-estimator
 
-![PyPI version](https://img.shields.io/pypi/v/PyMarkup.svg)
-[![Documentation Status](https://readthedocs.org/projects/PyMarkup/badge/?version=latest)](https://PyMarkup.readthedocs.io/en/latest/?version=latest)
+![PyPI version](https://img.shields.io/pypi/v/PyMarkup-estimator.svg)
+[![Documentation Status](https://readthedocs.org/projects/PyMarkup-estimator/badge/?version=latest)](https://PyMarkup-estimator.readthedocs.io/en/latest/?version=latest)
+[![Tests](https://github.com/immortalsRDJ/PyMarkup-estimator/workflows/Tests/badge.svg)](https://github.com/immortalsRDJ/PyMarkup-estimator/actions)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery.
 
-* PyPI package: https://pypi.org/project/PyMarkup/
+* PyPI package: https://pypi.org/project/PyMarkup-estimator/
+* GitHub repository: https://github.com/immortalsRDJ/PyMarkup-estimator
 * Free software: MIT License
-* Documentation: https://PyMarkup.readthedocs.io.
+* Documentation: https://PyMarkup-estimator.readthedocs.io
 
 ## Key Features
 
@@ -37,7 +40,12 @@ A Python toolkit for estimating firm-level markups using production function-bas
 ### Installation
 
 ```bash
-pip install PyMarkup
+pip install PyMarkup-estimator
+```
+
+**Note:** The package name is `PyMarkup-estimator`, but you import it as `PyMarkup`:
+```python
+from PyMarkup import MarkupPipeline  # Import name stays the same!
 ```
 
 ### Python API

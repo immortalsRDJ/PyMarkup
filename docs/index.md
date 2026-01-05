@@ -1,4 +1,4 @@
-# Welcome to PyMarkup's documentation!
+# Welcome to PyMarkup-estimator's documentation!
 
 ## Contents
 

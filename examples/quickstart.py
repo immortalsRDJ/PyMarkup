@@ -1,8 +1,13 @@
 """
-PyMarkup Quick Start Example
+PyMarkup-estimator Quick Start Example
 
-This script demonstrates basic usage of the PyMarkup package for
-estimating firm-level markups from Compustat data.
+This script demonstrates basic usage of the PyMarkup-estimator package
+for estimating firm-level markups from Compustat data.
+
+Installation:
+    pip install PyMarkup-estimator
+
+Note: The package is called 'PyMarkup-estimator' but imported as 'PyMarkup'
 """
 
 from pathlib import Path

@@ -2,37 +2,42 @@
 
 ## Stable release
 
-To install PyMarkup, run this command in your terminal:
+To install PyMarkup-estimator, run this command in your terminal:
 
 ```sh
-uv add PyMarkup
+pip install PyMarkup-estimator
 ```
 
-Or if you prefer to use `pip`:
+Or if you use `uv`:
 
 ```sh
-pip install PyMarkup
+uv add PyMarkup-estimator
+```
+
+**Note:** The package name is `PyMarkup-estimator`, but you import it as `PyMarkup`:
+```python
+from PyMarkup import MarkupPipeline
 ```
 
 ## From source
 
-The source files for PyMarkup can be downloaded from the [Github repo](https://github.com/immortalsRDJ/PyMarkup).
+The source files for PyMarkup-estimator can be downloaded from the [GitHub repo](https://github.com/immortalsRDJ/PyMarkup-estimator).
 
 You can either clone the public repository:
 
 ```sh
-git clone git://github.com/immortalsRDJ/PyMarkup
+git clone https://github.com/immortalsRDJ/PyMarkup-estimator.git
 ```
 
-Or download the [tarball](https://github.com/immortalsRDJ/PyMarkup/tarball/master):
+Or download the [tarball](https://github.com/immortalsRDJ/PyMarkup-estimator/tarball/main):
 
 ```sh
-curl -OJL https://github.com/immortalsRDJ/PyMarkup/tarball/master
+curl -OJL https://github.com/immortalsRDJ/PyMarkup-estimator/tarball/main
 ```
 
 Once you have a copy of the source, you can install it with:
 
 ```sh
-cd PyMarkup
-uv pip install .
+cd PyMarkup-estimator
+pip install -e .
 ```
