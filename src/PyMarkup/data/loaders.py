@@ -58,39 +58,93 @@ def load_macro_vars(path: Path) -> pd.DataFrame:
     return macro[["year", "USGDP", "usercost"]]
 
 
-def load_ppi(path: Path) -> pd.DataFrame:
+def load_ppi(path: Path, frequency: str = "annual") -> pd.DataFrame:
     """
     Load Producer Price Index (PPI) data.
 
     Parameters
     ----------
     path : Path
-        Path to PPI data file
+        Path to PPI directory or specific PPI file
+    frequency : str, default "annual"
+        Either "annual" or "quarterly"
 
     Returns
     -------
     pd.DataFrame
-        PPI data
+        PPI data with columns: year, naics_code, PPI (annual)
+        or year, quarter, naics_code, PPI, date (quarterly)
+
+    Raises
+    ------
+    FileNotFoundError
+        If PPI file not found
+    ValueError
+        If frequency is not "annual" or "quarterly"
     """
-    logger.info(f"Loading PPI from {path}")
-    # TODO: Implement PPI loading logic
-    raise NotImplementedError("PPI loading not yet implemented")
+    if frequency not in ["annual", "quarterly"]:
+        raise ValueError(f"frequency must be 'annual' or 'quarterly', got: {frequency}")
+
+    path = Path(path)
+
+    # If path is a directory, construct the filename
+    if path.is_dir():
+        file_path = path / f"PPI_{frequency}.csv"
+    else:
+        file_path = path
+
+    logger.info(f"Loading PPI ({frequency}) from {file_path}")
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"PPI file not found: {file_path}")
+
+    df = pd.read_csv(file_path)
+
+    # Drop any unnamed index columns
+    if df.columns[0].lower().startswith("unnamed"):
+        df = df.iloc[:, 1:]
+
+    return df
 
 
-def load_cpi(path: Path) -> pd.DataFrame:
+def load_cpi(path: Path, frequency: str = "annual") -> pd.DataFrame:
     """
     Load Consumer Price Index (CPI) data.
 
     Parameters
     ----------
     path : Path
-        Path to CPI data file
+        Path to CPI directory or specific CPI file
+    frequency : str, default "annual"
+        Either "annual" or "quarterly"
 
     Returns
     -------
     pd.DataFrame
-        CPI data
+        CPI data with columns: year, CPI (annual)
+        or quarter, CPI (quarterly)
+
+    Raises
+    ------
+    FileNotFoundError
+        If CPI file not found
+    ValueError
+        If frequency is not "annual" or "quarterly"
     """
-    logger.info(f"Loading CPI from {path}")
-    # TODO: Implement CPI loading logic
-    raise NotImplementedError("CPI loading not yet implemented")
+    if frequency not in ["annual", "quarterly"]:
+        raise ValueError(f"frequency must be 'annual' or 'quarterly', got: {frequency}")
+
+    path = Path(path)
+
+    # If path is a directory, construct the filename
+    if path.is_dir():
+        file_path = path / f"CPI_{frequency}.csv"
+    else:
+        file_path = path
+
+    logger.info(f"Loading CPI ({frequency}) from {file_path}")
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"CPI file not found: {file_path}")
+
+    return pd.read_csv(file_path)
