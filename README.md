@@ -48,6 +48,24 @@ pip install PyMarkup-estimator
 from PyMarkup import MarkupPipeline  # Import name stays the same!
 ```
 
+### ⚠️ Security Setup (First Time Users)
+
+Before downloading data, you need to set up your API credentials:
+
+1. **Copy the configuration template:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit `.env` and add your API keys:**
+   ```bash
+   FRED_API_KEY=your_fred_api_key  # Get free key at fred.stlouisfed.org
+   ```
+
+3. **Never commit your `.env` file** - it's automatically ignored by git
+
+See [SECURITY_SETUP.md](SECURITY_SETUP.md) for detailed instructions.
+
 ### Python API
 
 ```python
@@ -125,17 +143,18 @@ Use the data module to download all required datasets:
 ```python
 from pathlib import Path
 from PyMarkup.data import download_compustat, download_cpi, download_ppi
+from PyMarkup.config_loader import get_fred_api_key, get_wrds_username
 
-# Download Compustat (requires WRDS credentials)
+# Download Compustat (uses WRDS credentials from .env or default auth)
 download_compustat(
     output_dir=Path("Input/DLEU/"),
-    wrds_username="your_username"
+    wrds_username=get_wrds_username()
 )
 
-# Download CPI (requires FRED API key)
+# Download CPI (uses FRED API key from .env)
 download_cpi(
     output_dir=Path("Input/CPI/"),
-    fred_api_key="your_fred_api_key"
+    fred_api_key=get_fred_api_key()
 )
 
 # Download PPI (browser automation)
