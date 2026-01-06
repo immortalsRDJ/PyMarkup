@@ -19,6 +19,12 @@ A Python toolkit for estimating firm-level markups using production function-bas
   - **Cost Share**: Direct accounting approach assuming perfect competition (quick benchmark)
   - **ACF**: Ackerberg-Caves-Frazer two-stage GMM with productivity proxy (robustness check)
 
+- **Markup Decomposition** 🆕: Analyze what drives aggregate markup changes
+  - **FHK Decomposition**: Break down into within-firm, between-firm, cross, entry, and exit components
+  - **Melitz-Polanec**: Simpler decomposition focusing on surviving vs. new/exiting firms
+  - **Trend Analysis**: Calculate aggregate markup evolution over time
+  - **Visualization**: Publication-ready decomposition charts
+
 - **Flexible Configuration**: YAML config files or programmatic Python API
 
 - **Industry-Level Estimation**: Rolling windows with configurable minimum observation thresholds
@@ -45,7 +51,7 @@ pip install PyMarkup-estimator
 
 <!-- **Note:** The package name is `PyMarkup-estimator`, but you import it as `PyMarkup`: -->
 ```python
-from PyMarkup import MarkupPipeline  # Import name stays the same!
+from PyMarkup import MarkupPipeline
 ```
 
 ### ⚠️ Security Setup (First Time Users)
@@ -91,6 +97,25 @@ results = pipeline.run()
 results.save("output/", format="csv")
 comparison = results.compare_methods()
 fig = results.plot_aggregate()
+```
+
+### Decomposition Analysis 🆕
+
+```python
+from PyMarkup.decomposition import FHKDecomposition, plot_decomposition
+
+# Decompose markup changes into components
+fhk = FHKDecomposition()
+decomp_results = fhk.decompose(firm_markups)
+
+# Visualize decomposition
+fig = plot_decomposition(
+    decomp_results,
+    decomp_type="fhk",
+    save_path="output/decomposition.png"
+)
+
+# See docs/decomposition_guide.md for detailed examples
 ```
 
 ### Command Line
@@ -202,6 +227,29 @@ ruff check .
 ruff format .
 ```
 
-## TODO
+## Documentation
 
-* Decomposition
+- **[README.md](README.md)** - This file (overview and quick start)
+- **[SECURITY_SETUP.md](SECURITY_SETUP.md)** - API key and credential setup
+- **[DATA_DOWNLOADING_GUIDE.md](DATA_DOWNLOADING_GUIDE.md)** - Detailed data download instructions
+- **[docs/decomposition_guide.md](docs/decomposition_guide.md)** - Complete decomposition tutorial 🆕
+- **[CLAUDE.md](CLAUDE.md)** - Development guide for contributors
+- **[PROJECT_STRUCTURE_PLAN.md](PROJECT_STRUCTURE_PLAN.md)** - Project organization plan
+
+## Citation
+
+If you use PyMarkup in your research, please cite:
+
+```bibtex
+@software{pymarkup2025,
+  title = {PyMarkup: Production Function-Based Markup Estimation Toolkit},
+  author = {Meng, Yangyang (Claire)},
+  year = {2025},
+  url = {https://github.com/immortalsRDJ/PyMarkup},
+  version = {0.2.0}
+}
+```
+
+## License
+
+MIT License - see LICENSE file for details
