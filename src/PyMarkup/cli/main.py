@@ -73,7 +73,7 @@ def estimate(
 
         # Save results
         console.print(f"\n[bold green]Saving results to {output}...[/bold green]")
-        # TODO: Use MarkupResults.save() when implemented
+        results.save(output_dir=output, format="csv")
 
         console.print("\n[bold green]✓ Pipeline completed successfully![/bold green]\n")
 

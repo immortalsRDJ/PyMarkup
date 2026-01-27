@@ -1,5 +1,7 @@
-# PyMarkup Configuration Example
-# ===============================
+# PyMarkup-estimator Configuration Example
+# ==========================================
+# Package: pip install PyMarkup-estimator
+# Usage: pymarkup estimate --config config.yaml
 
 # Data paths
 compustat_path: Input/DLEU/Compustat_annual.dta

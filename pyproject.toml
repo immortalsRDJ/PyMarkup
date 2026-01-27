@@ -1,5 +1,5 @@
 [project]
-name = "PyMarkup"
+name = "PyMarkup-estimator"
 version = "0.2.0-dev"
 description = "A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery."
 readme = "README.md"
@@ -49,7 +49,7 @@ test = [
     "ipdb>=0.13",
 ]
 dev = [
-    "PyMarkup[test]",
+    "PyMarkup-estimator[test]",
     "jupyter>=1.0",
     "ipython>=8.0",
 ]
@@ -58,9 +58,11 @@ wrds = [
 ]
 
 [project.urls]
-bugs = "https://github.com/{{ cookiecutter.github_username }}/{{ cookiecutter.project_slug }}/issues"
-changelog = "https://github.com/{{ cookiecutter.github_username }}/{{ cookiecutter.project_slug }}/blob/master/changelog.md"
-homepage = "https://github.com/{{ cookiecutter.github_username }}/{{ cookiecutter.project_slug }}"
+homepage = "https://github.com/immortalsRDJ/PyMarkup-estimator"
+repository = "https://github.com/immortalsRDJ/PyMarkup-estimator"
+documentation = "https://PyMarkup-estimator.readthedocs.io"
+bugs = "https://github.com/immortalsRDJ/PyMarkup-estimator/issues"
+changelog = "https://github.com/immortalsRDJ/PyMarkup-estimator/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pymarkup = "PyMarkup.cli.main:app"

@@ -146,6 +146,11 @@ ENV/
 env.bak/
 venv.bak/
 
+# Configuration files with credentials (keep .example files)
+config.yaml
+config.yml
+.secrets.yaml
+
 # Spyder project settings
 .spyderproject
 .spyproject

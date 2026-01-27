@@ -3,7 +3,7 @@ PyMarkup: Production function-based markup estimation toolkit.
 
 This package provides tools for estimating firm-level markups using
 production function approaches including Wooldridge IV, Cost Share,
-and Ackerberg-Caves-Frazer (ACF) methods.
+and Ackerberg-Caves-Frazer (ACF) methods, plus markup decomposition tools.
 
 Public API
 ----------
@@ -17,6 +17,12 @@ Estimators (for researchers who want control):
     CostShareEstimator : Direct cost share estimator
     ACFEstimator : Ackerberg-Caves-Frazer GMM estimator
     ProductionFunctionEstimator : Base class for all estimators
+
+Decomposition (analyze markup trends):
+    FHKDecomposition : Foster-Haltiwanger-Krizan decomposition
+    MelitzDecomposition : Melitz-Polanec decomposition
+    aggregate_markup_trends : Calculate aggregate trends
+    plot_decomposition : Visualize decomposition results
 
 Input/Output:
     InputData : Validated input data container
@@ -36,6 +42,13 @@ High-level pipeline API:
 >>> results = pipeline.run()
 >>> results.save("output/")
 
+Decomposition analysis:
+
+>>> from PyMarkup.decomposition import FHKDecomposition, plot_decomposition
+>>> fhk = FHKDecomposition()
+>>> decomp_results = fhk.decompose(firm_markups)
+>>> fig = plot_decomposition(decomp_results, save_path="decomp.png")
+
 Low-level estimator API:
 
 >>> from PyMarkup.estimators import WooldridgeIVEstimator
@@ -46,6 +59,13 @@ Low-level estimator API:
 """
 
 from PyMarkup._version import __version__
+from PyMarkup.decomposition import (
+    FHKDecomposition,
+    MelitzDecomposition,
+    aggregate_markup_trends,
+    plot_component_contributions,
+    plot_decomposition,
+)
 from PyMarkup.estimators import (
     ACFEstimator,
     CostShareEstimator,
@@ -69,6 +89,12 @@ __all__ = [
     "WooldridgeIVEstimator",
     "CostShareEstimator",
     "ACFEstimator",
+    # Decomposition
+    "FHKDecomposition",
+    "MelitzDecomposition",
+    "aggregate_markup_trends",
+    "plot_decomposition",
+    "plot_component_contributions",
     # I/O
     "InputData",
     "MarkupResults",

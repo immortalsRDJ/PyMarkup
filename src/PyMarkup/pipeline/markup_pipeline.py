@@ -10,6 +10,7 @@ import pandas as pd
 from PyMarkup.core.data_preparation import create_compustat_panel
 from PyMarkup.core.markup_calculation import compute_markups
 from PyMarkup.estimators import ACFEstimator, CostShareEstimator, WooldridgeIVEstimator
+from PyMarkup.io.schemas import MarkupResults
 from PyMarkup.pipeline.config import PipelineConfig
 
 logger = logging.getLogger(__name__)
@@ -190,7 +191,7 @@ class MarkupPipeline:
 
         return all_markups
 
-    def run(self):
+    def run(self) -> MarkupResults:
         """
         Execute the full pipeline.
 
@@ -212,14 +213,15 @@ class MarkupPipeline:
         # Step 3: Markup calculation
         all_markups = self.run_markup_calculation(all_elasticities)
 
-        # TODO: Create MarkupResults object
-        # For now, return a simple dict
+        # Create and store MarkupResults object
         logger.info("\n" + "=" * 80)
         logger.info("Pipeline completed successfully!")
         logger.info("=" * 80)
 
-        return {
-            "markups": all_markups,
-            "elasticities": all_elasticities,
-            "config": self.config,
-        }
+        self.results = MarkupResults.from_pipeline(
+            markups=all_markups,
+            elasticities=all_elasticities,
+            config=self.config,
+        )
+
+        return self.results

@@ -104,14 +104,14 @@ class InputData(BaseModel):
         InputData
             Validated input data
         """
+        # Handle year column (might be 'fyear')
+        if "year" not in df.columns and "fyear" in df.columns:
+            df = df.rename(columns={"fyear": "year"})
+
         required_cols = {"gvkey", "year", "sale", "cogs", "ppegt", "naics"}
         missing = required_cols - set(df.columns)
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
-
-        # Handle year column (might be 'fyear')
-        if "year" not in df.columns and "fyear" in df.columns:
-            df = df.rename(columns={"fyear": "year"})
 
         return cls(
             gvkey=df["gvkey"],

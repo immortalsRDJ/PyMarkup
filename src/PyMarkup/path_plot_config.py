@@ -14,7 +14,22 @@ out_dir = proj_dir / 'Output'
 
 
 # Fred API key for downloading CPI data
-fred_apikey = '1aa8f608e651844ecccf03f08aba2dc3' # insert your Fred API key here
+# SECURITY: API key has been moved to config file
+# See .env.example or config.yaml.example for setup instructions
+try:
+    from .config_loader import get_fred_api_key
+    fred_apikey = get_fred_api_key()
+    if fred_apikey is None:
+        import warnings
+        warnings.warn(
+            "FRED API key not found. Please set FRED_API_KEY in:\n"
+            "  1. Environment variable: export FRED_API_KEY='your_key'\n"
+            "  2. .env file (copy from .env.example)\n"
+            "  3. config.yaml file (copy from config.yaml.example)\n"
+            "Get a free API key at: https://fred.stlouisfed.org/docs/api/api_key.html"
+        )
+except ImportError:
+    fred_apikey = None
 
 # For plotting
 
