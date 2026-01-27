@@ -10,21 +10,23 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def load_compustat(path: Path) -> pd.DataFrame:
+def load_compustat(path: Path, frequency: str = "annual") -> pd.DataFrame:
     """
-    Load Compustat annual data from Stata file.
+    Load Compustat data from Stata file.
 
     Parameters
     ----------
     path : Path
-        Path to Compustat_annual.dta
+        Path to Compustat .dta file
+    frequency : str
+        "annual" or "quarterly"
 
     Returns
     -------
     pd.DataFrame
         Raw Compustat data
     """
-    logger.info(f"Loading Compustat from {path}")
+    logger.info(f"Loading Compustat ({frequency}) from {path}")
     if not path.exists():
         raise FileNotFoundError(f"Compustat file not found: {path}")
     return pd.read_stata(path)
@@ -58,39 +60,90 @@ def load_macro_vars(path: Path) -> pd.DataFrame:
     return macro[["year", "USGDP", "usercost"]]
 
 
-def load_ppi(path: Path) -> pd.DataFrame:
+def load_ppi(path: Path, frequency: str = "annual") -> pd.DataFrame:
     """
     Load Producer Price Index (PPI) data.
 
     Parameters
     ----------
     path : Path
-        Path to PPI data file
+        Path to PPI CSV file (PPI_annual.csv or PPI_quarterly.csv)
+    frequency : str
+        "annual" or "quarterly"
 
     Returns
     -------
     pd.DataFrame
-        PPI data
+        PPI data with columns: naics_code, year, PPI (and quarter for quarterly)
     """
-    logger.info(f"Loading PPI from {path}")
-    # TODO: Implement PPI loading logic
-    raise NotImplementedError("PPI loading not yet implemented")
+    logger.info(f"Loading PPI ({frequency}) from {path}")
+    if not path.exists():
+        raise FileNotFoundError(f"PPI file not found: {path}")
+
+    df = pd.read_csv(path)
+
+    # Validate columns
+    if frequency == "annual":
+        required = {"naics_code", "year", "PPI"}
+    else:
+        required = {"naics_code", "year", "quarter", "PPI"}
+
+    if not required.issubset(df.columns):
+        raise ValueError(f"PPI file must contain columns: {required}")
+
+    return df
 
 
-def load_cpi(path: Path) -> pd.DataFrame:
+def load_cpi(path: Path, frequency: str = "annual") -> pd.DataFrame:
     """
     Load Consumer Price Index (CPI) data.
 
     Parameters
     ----------
     path : Path
-        Path to CPI data file
+        Path to CPI CSV file (CPI_annual.csv or CPI_quarterly.csv)
+    frequency : str
+        "annual" or "quarterly"
 
     Returns
     -------
     pd.DataFrame
-        CPI data
+        CPI data with columns: year/quarter, CPI
     """
-    logger.info(f"Loading CPI from {path}")
-    # TODO: Implement CPI loading logic
-    raise NotImplementedError("CPI loading not yet implemented")
+    logger.info(f"Loading CPI ({frequency}) from {path}")
+    if not path.exists():
+        raise FileNotFoundError(f"CPI file not found: {path}")
+
+    df = pd.read_csv(path)
+
+    # Validate columns
+    if frequency == "annual":
+        required = {"year", "CPI"}
+    else:
+        required = {"quarter", "CPI"}
+
+    if not required.issubset(df.columns):
+        raise ValueError(f"CPI file must contain columns: {required}")
+
+    return df
+
+
+def load_naics_descriptions(path: Path) -> pd.DataFrame:
+    """
+    Load NAICS industry code descriptions.
+
+    Parameters
+    ----------
+    path : Path
+        Path to NAICS_2D_Description.xlsx
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with industry codes and descriptions
+    """
+    logger.info(f"Loading NAICS descriptions from {path}")
+    if not path.exists():
+        raise FileNotFoundError(f"NAICS description file not found: {path}")
+
+    return pd.read_excel(path)

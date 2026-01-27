@@ -209,6 +209,9 @@ Input/
 Intermediate/
 Output/
 
+# Config with API keys (use config.example.yaml as template)
+config.yaml
+
 # macOS metadata
 .DS_Store
 **/.DS_Store

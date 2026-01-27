@@ -1,14 +1,92 @@
 # PyMarkup
 
-![PyPI version](https://img.shields.io/pypi/v/PyMarkup.svg)
-[![Documentation Status](https://readthedocs.org/projects/PyMarkup/badge/?version=latest)](https://PyMarkup.readthedocs.io/en/latest/?version=latest)
-
 A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery.
 
-* PyPI package: https://pypi.org/project/PyMarkup/
-* Free software: MIT License
-* Documentation: https://PyMarkup.readthedocs.io.
+## Installation
 
-## TODO
+```bash
+pip install PyMarkup
+# or
+uv add PyMarkup
+```
 
-* Decomposition
+From source:
+```bash
+git clone https://github.com/immortalsRDJ/PyMarkup
+cd PyMarkup
+uv pip install .
+```
+
+## Quick Start
+
+### High-level Pipeline API
+
+```python
+from PyMarkup import MarkupPipeline, PipelineConfig, EstimatorConfig
+
+config = PipelineConfig(
+    compustat_path="Input/DLEU/Compustat_annual.dta",
+    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
+    estimator=EstimatorConfig(
+        method="wooldridge_iv",  # or "cost_share", "acf", "all"
+        iv_specification="spec2",
+        window_years=5,
+    ),
+    output_dir="output/",
+)
+
+pipeline = MarkupPipeline(config)
+results = pipeline.run()
+```
+
+### Low-level Estimator API
+
+```python
+from PyMarkup.estimators import WooldridgeIVEstimator, CostShareEstimator, ACFEstimator
+from PyMarkup.core.data_preparation import create_compustat_panel
+
+panel = create_compustat_panel(
+    compustat_path="Input/DLEU/Compustat_annual.dta",
+    macro_path="Input/DLEU/macro_vars_new.xlsx",
+)
+
+# Wooldridge IV (main method)
+iv = WooldridgeIVEstimator(specification="spec2", window_years=5)
+elasticities = iv.estimate_elasticities(panel)
+
+# Cost Share (fast baseline)
+cs = CostShareEstimator(include_sga=False, aggregation="median")
+cs_results = cs.estimate_elasticities(panel)
+
+# ACF (robustness check)
+acf = ACFEstimator(window_years=5, include_market_share=True)
+acf_results = acf.estimate_elasticities(panel)
+```
+
+### CLI
+
+```bash
+pymarkup estimate --config config.yaml
+pymarkup estimate --method wooldridge_iv --compustat data.dta --macro-vars macro.xlsx
+pymarkup validate Input/DLEU/Compustat_annual.dta
+```
+
+## Estimation Methods
+
+| Method | Class | Description |
+|--------|-------|-------------|
+| **Wooldridge IV** | `WooldridgeIVEstimator` | IV/GMM with lagged COGS instrument. Two specs: COGS+K or COGS+K+SGA |
+| **Cost Share** | `CostShareEstimator` | Direct accounting: theta = COGS/(COGS+K_expense) |
+| **ACF** | `ACFEstimator` | Ackerberg-Caves-Frazer two-stage GMM with productivity proxy |
+
+<!-- ## Development
+
+```bash
+just test       # Run tests
+just qa         # Run all QA checks (format, lint, type check, test)
+just coverage   # Run coverage analysis
+``` -->
+
+## License
+
+MIT License

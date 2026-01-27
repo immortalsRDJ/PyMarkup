@@ -1,0 +1,17 @@
+# PyMarkup Configuration
+# Copy this file to config.yaml and fill in your API keys
+
+# FRED API key for CPI data
+# Get one at: https://fred.stlouisfed.org/docs/api/api_key.html
+fred_api_key: ""
+
+# WRDS username for Compustat data
+# Register at: https://wrds-www.wharton.upenn.edu/
+wrds_username: ""
+
+# Data directories (relative to project root)
+data_dir: "Input"
+intermediate_dir: "Intermediate"
+
+# PPI download URL (usually no need to change)
+ppi_url: "https://download.bls.gov/pub/time.series/pc/pc.data.0.Current"
