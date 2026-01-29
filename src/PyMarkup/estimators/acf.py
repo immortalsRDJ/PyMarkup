@@ -281,3 +281,8 @@ class ACFEstimator(ProductionFunctionEstimator):
 
         logger.info(f"Successfully estimated ACF elasticities for {len(result)} industry-years")
         return result
+
+    def _get_output_filename(self, suffix: str, format: str) -> str:
+        """Get output filename matching original convention."""
+        suffix_part = f"_{suffix}" if suffix else ""
+        return f"theta_acf{suffix_part}.{format}"

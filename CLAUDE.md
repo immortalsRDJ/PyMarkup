@@ -55,18 +55,25 @@ Or via environment variables: `FRED_API_KEY`, `WRDS_USERNAME`
 ## Legacy vs New Pipeline
 
 **Legacy (numbered scripts):** Run via `run_all.py` or individually
-- `0.0 Download Compustat.py` - WRDS download (uses playwright)
+- `0.0 Download Compustat.py` - WRDS download
 - `0.1 Download CPI.py` - FRED download
-- `0.2 PPI Data Preparation.py` - BLS download (uses playwright)
+- `0.2 PPI Data Preparation.py` - BLS download (uses playwright browser)
 - `0.3 theta_estimation.py` - Estimate elasticities
 - `0.4 Create Main Datasets.py` - Merge datasets
 
 **New (package modules):** Import and use programmatically
 ```python
-from PyMarkup.data import download_ppi, download_cpi, load_config
+from PyMarkup.data import download_ppi, download_cpi, download_compustat, load_config
 config = load_config()
-download_ppi(config)  # Uses requests, no browser needed
+download_ppi(config)       # Uses requests, no browser needed
+download_cpi(config)       # Uses fredapi
+download_compustat(config) # Uses wrds library, prompts for credentials interactively
 ```
+
+Key improvements in new downloaders:
+- **No browser required**: PPI download uses `requests` instead of playwright
+- **Interactive credentials**: Compustat prompts for WRDS username/password if not in `.pgpass`
+- **Better error handling**: Graceful skips in tests when credentials unavailable
 
 ## Estimators
 

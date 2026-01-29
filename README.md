@@ -107,6 +107,85 @@ pymarkup validate Input/DLEU/Compustat_annual.dta
 | **Cost Share** | `CostShareEstimator` | Direct accounting: theta = COGS/(COGS+K_expense) |
 | **ACF** | `ACFEstimator` | Ackerberg-Caves-Frazer two-stage GMM with productivity proxy |
 
+### Estimator Parameters
+
+**WooldridgeIVEstimator**
+```python
+WooldridgeIVEstimator(
+    specification="spec2",   # "spec1" (COGS+K), "spec2" (COGS+K+SGA), or "both"
+    window_years=5,          # Rolling window size (±2 years)
+    industry_level=2,        # NAICS digits (2, 3, or 4)
+    min_observations=15,     # Minimum obs per window
+)
+```
+
+**CostShareEstimator**
+```python
+CostShareEstimator(
+    include_sga=False,       # Include SG&A in total costs
+    aggregation="median",    # "median", "mean", or "weighted_mean"
+    industry_level=2,        # NAICS digits (2, 3, or 4)
+)
+```
+
+**ACFEstimator**
+```python
+ACFEstimator(
+    window_years=5,          # Rolling window size
+    include_market_share=True,  # Include market share controls
+    industry_level=2,        # NAICS digits (2, 3, or 4)
+    min_observations=15,     # Minimum obs per window
+)
+```
+
+### Saving Results
+
+All estimators have an optional `save()` method to persist theta estimates:
+
+```python
+from PyMarkup.estimators import WooldridgeIVEstimator
+
+estimator = WooldridgeIVEstimator()
+result = estimator.estimate_elasticities(panel_data)
+
+# Save to Intermediate/ directory (optional)
+estimator.save(
+    output_dir="Intermediate/",
+    suffix="DEUSample",      # Creates theta_W_s_window_DEUSample.dta
+    format="dta",            # "dta" (Stata), "csv", or "parquet"
+)
+```
+
+**Output filenames by estimator:**
+| Estimator | Filename Pattern |
+|-----------|------------------|
+| `WooldridgeIVEstimator` | `theta_W_s_window_{suffix}.{format}` |
+| `CostShareEstimator` | `theta_c_{suffix}.{format}` |
+| `ACFEstimator` | `theta_acf_{suffix}.{format}` |
+
+### Output Format
+
+The `estimate_elasticities()` method returns a DataFrame with:
+
+| Column | Description |
+|--------|-------------|
+| `ind2d` | 2-digit NAICS industry code |
+| `year` | Fiscal year |
+| `theta_c` | Output elasticity w.r.t. COGS (variable input) |
+| `theta_k` | Output elasticity w.r.t. capital (IV/ACF only) |
+
+### Computing Markups
+
+Once you have theta estimates, compute firm-level markups:
+
+```python
+# Merge theta back to firm data
+firm_data = firm_data.merge(result, on=["ind2d", "year"], how="left")
+
+# Markup = theta * (Revenue / COGS)
+firm_data["markup"] = firm_data["theta_c"] * (firm_data["sale_D"] / firm_data["cogs_D"])
+```
+
 <!-- ## Development
 
 ```bash

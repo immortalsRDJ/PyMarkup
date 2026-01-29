@@ -140,3 +140,8 @@ class CostShareEstimator(ProductionFunctionEstimator):
         logger.info(f"Mean cost share: {agg['theta_c'].mean():.3f}, Median: {agg['theta_c'].median():.3f}")
 
         return agg[["ind2d", "year", "theta_c"]].copy()
+
+    def _get_output_filename(self, suffix: str, format: str) -> str:
+        """Get output filename matching original convention."""
+        suffix_part = f"_{suffix}" if suffix else ""
+        return f"theta_c{suffix_part}.{format}"

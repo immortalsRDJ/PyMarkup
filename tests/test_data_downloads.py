@@ -165,20 +165,39 @@ class TestCompustatDownload:
     """Tests for Compustat download functionality."""
 
     def test_download_compustat(self, config: DataConfig, temp_output_dir: Path) -> None:
-        """Test Compustat download from WRDS."""
+        """Test Compustat download from WRDS.
+
+        This test requires:
+        1. wrds package installed (uv sync --extra wrds)
+        2. WRDS credentials configured (wrds_username in config.yaml or .pgpass file)
+        3. Interactive terminal for password input (skip in CI)
+        """
+        import os
+        import sys
+
         try:
             import wrds
         except ImportError:
-            pytest.skip("wrds package not installed - install with: uv add wrds")
+            pytest.skip("wrds package not installed - install with: uv sync --extra wrds")
 
-        # This test requires WRDS credentials and can take a while
+        # Skip if no WRDS username configured and no .pgpass file
+        pgpass_path = Path.home() / ".pgpass"
+        if not config.wrds_username and not pgpass_path.exists():
+            pytest.skip("WRDS credentials not configured - set wrds_username in config.yaml or create .pgpass file")
+
+        # Skip if running in non-interactive environment (CI, pytest without -s)
+        if not sys.stdin.isatty():
+            pytest.skip("Skipping interactive WRDS test - run with 'pytest -s' for interactive mode")
+
         from PyMarkup.data import download_compustat
 
         try:
             annual_path, quarterly_path = download_compustat(config, output_dir=temp_output_dir)
+        except (EOFError, OSError) as e:
+            pytest.skip(f"Interactive input not available: {e}")
         except Exception as e:
-            if "WRDS" in str(e) or "authentication" in str(e).lower():
-                pytest.skip(f"WRDS authentication failed: {e}")
+            if "WRDS" in str(e) or "authentication" in str(e).lower() or "SSL" in str(e):
+                pytest.skip(f"WRDS connection failed: {e}")
             raise
 
         # Check files exist
