@@ -23,8 +23,8 @@ classifiers = [
 license = {text = "MIT"}
 dependencies = [
     "pandas>=2.0.0",
-    "numpy>=1.24.0",
-    "scipy>=1.10.0",
+    "numpy>=1.24.0,<2.0",  # Pin to 1.x to avoid macOS Accelerate compatibility issues
+    "scipy>=1.10.0,<1.14",  # Pin to avoid macOS Accelerate compatibility issues
     "statsmodels>=0.14.0",
     "linearmodels>=5.0",
     "pydantic>=2.0",

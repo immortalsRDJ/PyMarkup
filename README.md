@@ -14,7 +14,35 @@ From source:
 ```bash
 git clone https://github.com/immortalsRDJ/PyMarkup
 cd PyMarkup
-uv pip install .
+uv sync --python 3.10  # Python 3.10 recommended for compatibility
+```
+
+## Data Download
+
+PyMarkup includes data downloaders for Compustat, CPI, and PPI. Some require registered accounts:
+
+| Data Source | Account Required | Registration |
+|-------------|------------------|--------------|
+| **Compustat** | WRDS account | [wrds-www.wharton.upenn.edu](https://wrds-www.wharton.upenn.edu) (institutional access) |
+| **CPI** | FRED API key | [fred.stlouisfed.org/docs/api](https://fred.stlouisfed.org/docs/api/api_key.html) (free) |
+| **PPI** | None | Public BLS data |
+
+```python
+from PyMarkup.data import download_compustat, download_cpi, download_ppi, load_config
+
+# Download PPI (no account needed)
+download_ppi()
+
+# Download CPI (requires FRED API key in config.yaml or FRED_API_KEY env var)
+download_cpi()
+
+# Download Compustat (prompts for WRDS username/password interactively)
+download_compustat()
+```
+
+To use WRDS, install the optional dependency:
+```bash
+uv sync --extra wrds
 ```
 
 ## Quick Start

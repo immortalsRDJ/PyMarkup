@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -51,43 +52,53 @@ def download_compustat(
     logger.info("Connecting to WRDS...")
     db = wrds.Connection()
 
-    # Get NAICS codes
-    logger.info("Fetching NAICS codes...")
-    naics_query = "SELECT gvkey, naics FROM comp.company"
-    naics = db.raw_sql(naics_query).sort_values(["gvkey"])
+    # Use the raw psycopg2 connection for pandas compatibility
+    raw_conn = db.engine.raw_connection()
 
-    # Annual data
-    logger.info("Downloading annual Compustat data...")
-    annual_fields = [
-        "gvkey", "indfmt", "consol", "popsrc", "datafmt", "conm", "fyear",
-        "sale", "cogs", "xsga", "ppegt", "xlr", "xrd", "xad", "dvt",
-        "intan", "mkvalt", "tie", "emp", "ppent",
-    ]
-    annual_query = f"""
-        SELECT {', '.join(annual_fields)}
-        FROM comp.funda
-        WHERE consol = 'C' AND popsrc = 'D' AND datafmt = 'STD'
-    """
-    df_annual = db.raw_sql(annual_query).sort_values(["gvkey", "fyear"])
-    df_annual = pd.merge(df_annual, naics, on=["gvkey"], how="left")
+    try:
+        # Suppress pandas warning about DBAPI2 connections (works fine with psycopg2)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy connectable")
+
+            # Get NAICS codes
+            logger.info("Fetching NAICS codes...")
+            naics_query = "SELECT gvkey, naics FROM comp.company"
+            naics = pd.read_sql(naics_query, raw_conn).sort_values(["gvkey"])
+
+            # Annual data
+            logger.info("Downloading annual Compustat data...")
+            annual_fields = [
+                "gvkey", "indfmt", "consol", "popsrc", "datafmt", "conm", "fyear",
+                "sale", "cogs", "xsga", "ppegt", "xlr", "xrd", "xad", "dvt",
+                "intan", "mkvalt", "tie", "emp", "ppent",
+            ]
+            annual_query = f"""
+                SELECT {', '.join(annual_fields)}
+                FROM comp.funda
+                WHERE consol = 'C' AND popsrc = 'D' AND datafmt = 'STD'
+            """
+            df_annual = pd.read_sql(annual_query, raw_conn).sort_values(["gvkey", "fyear"])
+            df_annual = pd.merge(df_annual, naics, on=["gvkey"], how="left")
+
+            # Quarterly data
+            logger.info("Downloading quarterly Compustat data...")
+            quarterly_fields = [
+                "gvkey", "indfmt", "consol", "popsrc", "datafmt", "conm",
+                "fyearq", "fqtr", "saleq", "cogsq", "xsgaq", "ppegtq",
+            ]
+            quarterly_query = f"""
+                SELECT {', '.join(quarterly_fields)}
+                FROM comp.fundq
+                WHERE consol = 'C' AND popsrc = 'D' AND datafmt = 'STD'
+            """
+            df_quarterly = pd.read_sql(quarterly_query, raw_conn).sort_values(["gvkey", "fyearq", "fqtr"])
+            df_quarterly = pd.merge(df_quarterly, naics, on=["gvkey"], how="left")
+    finally:
+        raw_conn.close()
 
     annual_path = output_dir / "Compustat_annual.dta"
     df_annual.to_stata(annual_path, write_index=False)
     logger.info(f"Saved annual data to {annual_path}")
-
-    # Quarterly data
-    logger.info("Downloading quarterly Compustat data...")
-    quarterly_fields = [
-        "gvkey", "indfmt", "consol", "popsrc", "datafmt", "conm",
-        "fyearq", "fqtr", "saleq", "cogsq", "xsgaq", "ppegtq",
-    ]
-    quarterly_query = f"""
-        SELECT {', '.join(quarterly_fields)}
-        FROM comp.fundq
-        WHERE consol = 'C' AND popsrc = 'D' AND datafmt = 'STD'
-    """
-    df_quarterly = db.raw_sql(quarterly_query).sort_values(["gvkey", "fyearq", "fqtr"])
-    df_quarterly = pd.merge(df_quarterly, naics, on=["gvkey"], how="left")
 
     quarterly_path = output_dir / "Compustat_quarterly.dta"
     df_quarterly.to_stata(quarterly_path, write_index=False)
