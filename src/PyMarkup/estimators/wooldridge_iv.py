@@ -197,7 +197,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
         ind_num_col = f"nrind{self.industry_level}"
 
         # Get unique industry-year combinations
-        res = df[[ind_col, "year"]].drop_duplicates().copy()
+        res = df[[ind_col, ind_num_col, "year"]].drop_duplicates().copy()
 
         # Store actual industry code for output (don't rename yet)
         res["ind2d"] = res[ind_col]
@@ -253,7 +253,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                 (df[ind_col] == s) & (df["year"] < 1972) & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
             ]
             if subset.shape[0] > self.min_observations:
-                mask = (res["ind2d"] == s) & (res["year"] < 1970)
+                mask = (res[ind_col] == s) & (res["year"] < 1970)
                 estimate_for_subset(subset, mask)
 
         # Early windows: industries 18-25 (before 1970)
@@ -262,7 +262,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                 (df[ind_col] == s) & (df["year"] < 1972) & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
             ]
             if subset.shape[0] > self.min_observations:
-                mask = (res["ind2d"] == s) & (res["year"] < 1970)
+                mask = (res[ind_col] == s) & (res["year"] < 1970)
                 estimate_for_subset(subset, mask)
 
         # Special industry 17 (before 1985)
@@ -270,7 +270,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
             (df[ind_col] == 17) & (df["year"] < 1985) & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
         ]
         if subset_17.shape[0] > self.min_observations:
-            mask = (res["ind2d"] == 17) & (res["year"] < 1985)
+            mask = (res[ind_col] == 17) & (res["year"] < 1985)
             estimate_for_subset(subset_17, mask)
 
         # Rolling windows from 1970 onwards
@@ -287,7 +287,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                     & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
                 ]
                 if subset.shape[0] > self.min_observations:
-                    mask = (res["ind2d"] == s) & (res["year"] == t)
+                    mask = (res[ind_col] == s) & (res["year"] == t)
                     estimate_for_subset(subset, mask)
 
             # Industries 18-25
@@ -298,7 +298,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                     & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
                 ]
                 if subset.shape[0] > self.min_observations:
-                    mask = (res["ind2d"] == s) & (res["year"] == t)
+                    mask = (res[ind_col] == s) & (res["year"] == t)
                     estimate_for_subset(subset, mask)
 
             # Industry 17 (from 1985 onwards)
@@ -309,7 +309,7 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                     & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
                 ]
                 if subset.shape[0] > self.min_observations:
-                    mask = (res["ind2d"] == 17) & (res["year"] == t)
+                    mask = (res[ind_col] == 17) & (res["year"] == t)
                     estimate_for_subset(subset, mask)
 
     def estimate_elasticities(self, data: pd.DataFrame) -> pd.DataFrame:

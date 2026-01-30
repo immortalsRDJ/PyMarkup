@@ -99,6 +99,74 @@ pymarkup estimate --method wooldridge_iv --compustat data.dta --macro-vars macro
 pymarkup validate Input/DLEU/Compustat_annual.dta
 ```
 
+## Pipeline Overview
+
+```
+Data Download → Data Preparation → Elasticity Estimation (θ) → Markup Calculation → Decomposition
+```
+
+### 1. Data Download
+
+Download raw data from external sources:
+
+- **Compustat** (WRDS) — firm-level financials (sales, COGS, PPE, NAICS)
+- **CPI** (FRED) — consumer price index
+- **PPI** (BLS) — producer price index
+
+### 2. Data Preparation
+
+Loads Compustat and macro variables, then:
+
+- Cleans duplicates, extracts 2/3/4-digit NAICS codes
+- Deflates all values by GDP (e.g. `sale_D`, `cogs_D`, `capital_D`)
+- Computes market shares by industry-year
+- Trims outliers at 1st/99th percentiles
+
+**Output:** cleaned firm-year panel with deflated variables and market shares.
+
+### 3. Elasticity Estimation (Theta)
+
+Estimates **output elasticity w.r.t. COGS (θ_c)** at the industry-year level using one of three methods:
+
+| Method | Approach |
+|--------|----------|
+| **Wooldridge IV** | IV/2SLS with rolling windows; lagged COGS as instrument to address endogeneity |
+| **Cost Share** | Direct accounting: θ_c = COGS / (COGS + capital expense); no estimation needed |
+| **ACF** | Two-stage GMM with control function; handles selection and simultaneity bias |
+
+Typical values: θ_c ≈ 0.7–0.8, θ_k ≈ 0.1–0.2.
+
+### 4. Markup Calculation
+
+Merges industry-level elasticities onto the firm-level panel and computes:
+
+```
+Markup = θ_c / Cost_Share
+where Cost_Share = COGS / (COGS + capital_expense [+ SG&A])
+```
+
+- **Markup > 1** — price exceeds marginal cost (market power)
+- **Markup ≈ 1** — competitive pricing
+
+### 5. Decomposition (Optional)
+
+Decomposes aggregate markup changes over time:
+
+- **FHK** (Foster-Haltiwanger-Krizan) — within-firm + reallocation + entry/exit
+- **Melitz-Polanec** — alternative reallocation methodology
+
+### Output Files
+
+```
+Intermediate/
+├── elasticities_wooldridge_iv.csv   # θ estimates by industry-year
+├── elasticities_cost_share.csv
+├── elasticities_acf.csv
+├── markups_wooldridge_iv.csv        # Firm-level markups
+├── markups_cost_share.csv
+└── markups_acf.csv
+```
+
 ## Estimation Methods
 
 | Method | Class | Description |

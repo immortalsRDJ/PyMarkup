@@ -207,6 +207,9 @@ def create_compustat_panel(
         "mkvalt",
         "conm",
         "tie",
+        "nrind2",
+        "nrind3",
+        "nrind4",
     ]
     df = df[keep_cols]
 

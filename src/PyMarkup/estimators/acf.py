@@ -163,7 +163,7 @@ class ACFEstimator(ProductionFunctionEstimator):
             phi_reg_cols.extend(["ms2d", "ms4d"])
 
         # Add year dummies
-        year_dummies = pd.get_dummies(df["year"], prefix="year", drop_first=False)
+        year_dummies = pd.get_dummies(df["year"], prefix="year", drop_first=False).astype(float)
         X_phi = pd.concat([df[phi_reg_cols], year_dummies], axis=1)
         X_phi = sm.add_constant(X_phi)
         y_phi = df["y"]
