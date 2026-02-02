@@ -141,26 +141,65 @@ def test_acf(panel: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def test_markup_calculation(panel: pd.DataFrame, elasticities: pd.DataFrame, method: str) -> None:
-    """Test markup calculation from elasticities."""
+def test_markup_calculation(
+    panel: pd.DataFrame, elasticities: pd.DataFrame, method: str
+) -> None:
+    """Test markup calculation using core module (compute_markups + aggregate_markups)."""
+    from PyMarkup.core.markup_calculation import aggregate_markups, compute_markups
+
     print(f"\n  Markup calculation ({method}):")
 
-    merged = panel.merge(elasticities, on=["ind2d", "year"], how="inner")
-    if len(merged) == 0:
-        print("    SKIP: No matched firm-year observations")
+    # --- compute_markups: cogs_only ---
+    firm_markups = compute_markups(elasticities, panel, cost_share_type="cogs_only")
+
+    assert {"gvkey", "year", "ind2d", "markup", "theta_c", "cost_share"} == set(
+        firm_markups.columns
+    ), f"Unexpected columns: {list(firm_markups.columns)}"
+
+    valid = firm_markups.dropna(subset=["markup"])
+    valid = valid[(valid["markup"] > 0) & (valid["markup"] < 50)]
+    if len(valid) == 0:
+        print("    SKIP: No valid firm-year observations")
         return
 
-    # cost_share = cogs / (cogs + kexp)
-    merged["cost_share"] = merged["cogs_D"] / (merged["cogs_D"] + merged["kexp"])
-    merged["markup"] = merged["theta_c"] / merged["cost_share"]
-
-    # Remove extreme outliers for summary
-    valid = merged[(merged["markup"] > 0) & (merged["markup"] < 50)]
     print(f"    Firm-year observations: {len(valid):,}")
     print(f"    Markup mean:   {valid['markup'].mean():.4f}")
     print(f"    Markup median: {valid['markup'].median():.4f}")
     print(f"    Markup std:    {valid['markup'].std():.4f}")
     print(f"    Markup > 1:    {(valid['markup'] > 1).mean():.1%}")
+
+    # Cost share should be in (0, 1)
+    cs = valid["cost_share"]
+    assert (cs > 0).all() and (cs <= 1).all(), (
+        f"Cost shares outside (0,1]: min={cs.min():.4f}, max={cs.max():.4f}"
+    )
+
+    # --- compute_markups: with_sga ---
+    if "xsga_D" in panel.columns:
+        fm_sga = compute_markups(elasticities, panel, cost_share_type="with_sga")
+        valid_sga = fm_sga.dropna(subset=["markup"])
+        valid_sga = valid_sga[(valid_sga["markup"] > 0) & (valid_sga["markup"] < 50)]
+        if len(valid_sga) > 0:
+            print(
+                f"    With SGA - observations: {len(valid_sga):,}, "
+                f"median markup: {valid_sga['markup'].median():.4f}"
+            )
+
+    # --- aggregate_markups ---
+    agg_year = aggregate_markups(valid, by="year", method="median")
+    assert len(agg_year) > 0, "Year aggregation produced no rows"
+    print(
+        f"    Yearly median markup: [{agg_year['markup'].min():.4f}, "
+        f"{agg_year['markup'].max():.4f}] over {len(agg_year)} years"
+    )
+
+    agg_ind = aggregate_markups(valid, by="ind2d", method="mean")
+    assert len(agg_ind) > 0, "Industry aggregation produced no rows"
+    print(f"    Industry mean markup: {len(agg_ind)} industries")
+
+    agg_both = aggregate_markups(valid, by=["ind2d", "year"], method="median")
+    assert len(agg_both) > 0, "Industry-year aggregation produced no rows"
+    print(f"    Industry-year cells: {len(agg_both)}")
 
 
 def main() -> int:

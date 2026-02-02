@@ -72,6 +72,7 @@ from PyMarkup.estimators import (
     ProductionFunctionEstimator,
     WooldridgeIVEstimator,
 )
+from PyMarkup.core.figures import plot_aggregate_markup, plot_markup_vs_ppi, prepare_scatter_data
 from PyMarkup.io import InputData, MarkupResults
 from PyMarkup.pipeline import EstimatorConfig, MarkupPipeline, PipelineConfig
 
@@ -95,6 +96,10 @@ __all__ = [
     "aggregate_markup_trends",
     "plot_decomposition",
     "plot_component_contributions",
+    # Figures
+    "plot_aggregate_markup",
+    "plot_markup_vs_ppi",
+    "prepare_scatter_data",
     # I/O
     "InputData",
     "MarkupResults",

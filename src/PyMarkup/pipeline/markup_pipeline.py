@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from PyMarkup.core.data_preparation import create_compustat_panel
+from PyMarkup.core.figures import plot_aggregate_markup, plot_markup_vs_ppi, prepare_scatter_data
 from PyMarkup.core.markup_calculation import compute_markups
 from PyMarkup.estimators import ACFEstimator, CostShareEstimator, WooldridgeIVEstimator
 from PyMarkup.io.schemas import MarkupResults
@@ -190,6 +192,68 @@ class MarkupPipeline:
                 logger.error(f"✗ {name} failed: {exc}")
 
         return all_markups
+
+    def run_figures(
+        self,
+        all_markups: dict[str, pd.DataFrame],
+        ppi_data: pd.DataFrame | None = None,
+        cpi_data: pd.DataFrame | None = None,
+    ) -> None:
+        """
+        Generate figures from markup results.
+
+        Step 4: Produces Figure 1 (aggregate markup time series) and optionally
+        Figure 2 (CAGR of PPI vs markup scatter, if PPI/CPI data provided).
+
+        Parameters
+        ----------
+        all_markups : dict
+            Dictionary mapping method name to firm-level markup DataFrame.
+        ppi_data : pd.DataFrame, optional
+            PPI data with columns: ind2d, year, ppi.
+        cpi_data : pd.DataFrame, optional
+            CPI data with columns: year, CPI.
+        """
+        logger.info("=" * 80)
+        logger.info("STEP 4: Figure Generation")
+        logger.info("=" * 80)
+
+        fig_dir = self.config.output_dir / "figures"
+        fig_dir.mkdir(parents=True, exist_ok=True)
+
+        for name, markups in all_markups.items():
+            # Figure 1: Aggregate markup time series
+            logger.info(f"\nFigure 1 ({name}): Aggregate markup time series")
+            try:
+                fig1 = plot_aggregate_markup(
+                    markups,
+                    title=f"Aggregate Markup ({name})",
+                    save_path=fig_dir / f"aggregate_markup_{name}.pdf",
+                )
+                plt.close(fig1)
+                logger.info(f"  Saved aggregate_markup_{name}.pdf")
+            except Exception as exc:
+                logger.error(f"  Figure 1 ({name}) failed: {exc}")
+
+            # Figure 2: PPI vs markup scatter (needs PPI + CPI)
+            if ppi_data is not None and cpi_data is not None and self.panel_data is not None:
+                logger.info(f"\nFigure 2 ({name}): PPI vs markup scatter")
+                try:
+                    scatter = prepare_scatter_data(
+                        markups, self.panel_data, ppi_data, cpi_data,
+                    )
+                    if len(scatter) > 0:
+                        fig2 = plot_markup_vs_ppi(
+                            scatter,
+                            title=f"Growth of PPI and Markup ({name})",
+                            save_path=fig_dir / f"ppi_vs_markup_{name}.pdf",
+                        )
+                        plt.close(fig2)
+                        logger.info(f"  Saved ppi_vs_markup_{name}.pdf")
+                    else:
+                        logger.warning(f"  No scatter data for {name}")
+                except Exception as exc:
+                    logger.error(f"  Figure 2 ({name}) failed: {exc}")
 
     def run(self) -> MarkupResults:
         """
