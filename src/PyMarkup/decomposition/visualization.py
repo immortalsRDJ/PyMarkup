@@ -1,275 +1,171 @@
-"""Visualization tools for markup decompositions."""
+"""Visualization for dynamic Olley-Pakes decomposition."""
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Any
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+
+logger = logging.getLogger(__name__)
+
+
+def _apply_decomp_style() -> None:
+    """Apply plot style matching legacy setplotstyle_agg()."""
+    from cycler import cycler
+
+    import matplotlib
+    matplotlib.style.use("seaborn-v0_8-whitegrid")
+    matplotlib.rcParams.update({"font.size": 26})
+    plt.rcParams["figure.figsize"] = (15, 10)
+    plt.rc("font", size=26)
+    plt.rc("axes", titlesize=26, labelsize=26)
+    plt.rc("xtick", labelsize=26)
+    plt.rc("ytick", labelsize=26)
+    plt.rc("legend", fontsize=20)
+    plt.rc("figure", titlesize=26)
+    plt.rc(
+        "axes",
+        prop_cycle=(
+            cycler(color=["#252525", "#636363", "#969696", "#bdbdbd"])
+            * cycler(linestyle=["-", ":", "--", "-."])
+        ),
+    )
+    plt.rc("lines", linewidth=3)
 
 
 def plot_decomposition(
     decomposition: pd.DataFrame,
-    decomp_type: str = "fhk",
-    title: str | None = None,
-    figsize: tuple[int, int] = (12, 6),
+    cumulative: bool = True,
+    title: str = "Dynamic Olley-Pakes Decomposition of Markup Changes",
+    figsize: tuple[int, int] = (15, 10),
     save_path: Path | str | None = None,
-    **kwargs,
 ) -> plt.Figure:
     """
-    Plot decomposition results as stacked bar chart.
+    Plot decomposition results as a 4-line chart.
+
+    Shows aggregate markup change and its three components:
+    within, reallocation, and net entry.
 
     Parameters
     ----------
     decomposition : pd.DataFrame
-        Output from FHKDecomposition or MelitzDecomposition
-    decomp_type : str, default "fhk"
-        Type of decomposition: "fhk" or "melitz"
-    title : str, optional
-        Plot title. If None, auto-generates based on decomp_type.
-    figsize : tuple, default (12, 6)
-        Figure size in inches
+        Output from OlleyPakesDecomposition.decompose().
+        Must have columns: aggregate_change, within, reallocation, net_entry.
+        Index is the time period.
+    cumulative : bool, default True
+        If True, plot cumulative sums (shows level changes from base period).
+        If False, plot period-to-period changes.
+    title : str
+        Plot title.
+    figsize : tuple
+        Figure size in inches.
     save_path : Path or str, optional
-        If provided, saves figure to this path
-    **kwargs
-        Additional arguments passed to plt.bar()
+        If provided, saves figure to this path.
 
     Returns
     -------
     matplotlib.figure.Figure
-        The figure object
-
-    Examples
-    --------
-    >>> from PyMarkup.decomposition import FHKDecomposition, plot_decomposition
-    >>> fhk = FHKDecomposition()
-    >>> results = fhk.decompose(data)
-    >>> fig = plot_decomposition(results, save_path="decomp.png")
     """
+    _apply_decomp_style()
+
+    components = ["aggregate_change", "within", "reallocation", "net_entry"]
+    for col in components:
+        if col not in decomposition.columns:
+            raise ValueError(f"Missing column: {col}")
+
+    plot_data = decomposition[components].copy()
+    if cumulative:
+        plot_data = plot_data.cumsum()
+
     fig, ax = plt.subplots(figsize=figsize)
 
-    # Select components to plot
-    if decomp_type.lower() == "fhk":
-        components = ["within", "between", "cross", "entry", "exit"]
-        if title is None:
-            title = "Foster-Haltiwanger-Krizan Decomposition of Markup Changes"
-    elif decomp_type.lower() == "melitz":
-        components = ["surviving", "entry", "exit"]
-        if title is None:
-            title = "Melitz-Polanec Decomposition of Markup Changes"
-    else:
-        # Auto-detect components (exclude metadata columns)
-        exclude = [
-            "aggregate_change",
-            "n_continuing",
-            "n_entrants",
-            "n_exiters",
-            "n_surviving",
-        ]
-        components = [c for c in decomposition.columns if c not in exclude]
-        if title is None:
-            title = "Markup Decomposition"
+    ax.plot(plot_data.index, plot_data["aggregate_change"],
+            color="black", linestyle="-", linewidth=3, label="Markup (Total)")
+    ax.plot(plot_data.index, plot_data["within"],
+            color="darkgreen", linestyle="-", linewidth=3, label="Within")
+    ax.plot(plot_data.index, plot_data["reallocation"],
+            color="orange", linestyle="--", linewidth=3, label="Reallocation")
+    ax.plot(plot_data.index, plot_data["net_entry"],
+            color="steelblue", linestyle=":", linewidth=3, label="Net Entry")
 
-    # Prepare data for stacking
-    decomp_plot = decomposition[components].copy()
-
-    # Create colors - exit is negative, so use different color
-    colors = plt.cm.Set3(range(len(components)))
-    if "exit" in components:
-        exit_idx = components.index("exit")
-        decomp_plot["exit"] = -decomp_plot["exit"]  # Flip sign for visualization
-
-    # Create stacked bar chart
-    decomp_plot.plot(
-        kind="bar", stacked=True, ax=ax, color=colors, edgecolor="black", **kwargs
-    )
-
-    # Add aggregate change line
-    if "aggregate_change" in decomposition.columns:
-        ax.plot(
-            range(len(decomposition)),
-            decomposition["aggregate_change"],
-            color="red",
-            marker="o",
-            linewidth=2,
-            markersize=6,
-            label="Total Change",
-        )
-
-    # Formatting
-    ax.set_title(title, fontsize=14, fontweight="bold")
-    ax.set_xlabel("Period", fontsize=12)
-    ax.set_ylabel("Markup Change", fontsize=12)
     ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
-    ax.legend(loc="best", frameon=True)
-    ax.grid(True, alpha=0.3)
+    ax.set_ylabel("Cumulative Change" if cumulative else "Period Change")
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
 
-    # Rotate x-axis labels
-    ax.set_xticklabels(decomposition.index, rotation=45, ha="right")
-
-    plt.tight_layout()
-
-    # Save if requested
     if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        logger.info(f"Saved decomposition plot to {save_path}")
 
     return fig
 
 
 def plot_component_contributions(
     decomposition: pd.DataFrame,
-    components: list[str] | None = None,
-    title: str = "Component Contributions to Markup Change",
-    figsize: tuple[int, int] = (10, 6),
+    title: str = "Period-to-Period Decomposition of Markup Changes",
+    figsize: tuple[int, int] = (15, 10),
     save_path: Path | str | None = None,
 ) -> plt.Figure:
     """
-    Plot each component's contribution over time as line chart.
+    Plot period-to-period component contributions as a stacked bar chart.
 
     Parameters
     ----------
     decomposition : pd.DataFrame
-        Decomposition results
-    components : list of str, optional
-        Components to plot. If None, plots all numeric columns.
+        Output from OlleyPakesDecomposition.decompose().
     title : str
-        Plot title
-    figsize : tuple, default (10, 6)
-        Figure size
+        Plot title.
+    figsize : tuple
+        Figure size in inches.
     save_path : Path or str, optional
-        Path to save figure
+        If provided, saves figure to this path.
 
     Returns
     -------
     matplotlib.figure.Figure
-        The figure object
     """
+    _apply_decomp_style()
+
+    components = ["within", "reallocation", "net_entry"]
+    plot_data = decomposition[components].copy()
+
     fig, ax = plt.subplots(figsize=figsize)
 
-    # Auto-detect components if not provided
-    if components is None:
-        exclude = [
-            "aggregate_change",
-            "n_continuing",
-            "n_entrants",
-            "n_exiters",
-            "n_surviving",
-        ]
-        components = [c for c in decomposition.columns if c not in exclude]
-
-    # Plot each component
-    for comp in components:
-        if comp in decomposition.columns:
-            ax.plot(
-                decomposition.index,
-                decomposition[comp],
-                marker="o",
-                label=comp.replace("_", " ").title(),
-                linewidth=2,
-                markersize=6,
-            )
-
-    # Formatting
-    ax.set_title(title, fontsize=14, fontweight="bold")
-    ax.set_xlabel("Period", fontsize=12)
-    ax.set_ylabel("Contribution", fontsize=12)
-    ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
-    ax.legend(loc="best", frameon=True)
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    return fig
-
-
-def plot_aggregate_with_decomposition(
-    trends: pd.DataFrame,
-    decomposition: pd.DataFrame,
-    decomp_type: str = "fhk",
-    figsize: tuple[int, int] = (14, 10),
-    save_path: Path | str | None = None,
-) -> plt.Figure:
-    """
-    Create comprehensive plot with aggregate trends and decomposition.
-
-    Parameters
-    ----------
-    trends : pd.DataFrame
-        Output from aggregate_markup_trends()
-    decomposition : pd.DataFrame
-        Output from decomposition
-    decomp_type : str, default "fhk"
-        Decomposition type
-    figsize : tuple, default (14, 10)
-        Figure size
-    save_path : Path or str, optional
-        Path to save figure
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        The figure object
-    """
-    fig, axes = plt.subplots(2, 1, figsize=figsize)
-
-    # Top panel: Aggregate markup trend
-    ax1 = axes[0]
-    ax1.plot(
-        trends.index if trends.index.name else range(len(trends)),
-        trends["aggregate_markup"] if "aggregate_markup" in trends.columns else trends.iloc[:, 0],
-        marker="o",
-        linewidth=2,
-        markersize=6,
-        color="darkblue",
-        label="Aggregate Markup",
+    colors = {"within": "darkgreen", "reallocation": "orange", "net_entry": "steelblue"}
+    plot_data.plot(
+        kind="bar", stacked=True, ax=ax,
+        color=[colors[c] for c in components],
+        edgecolor="black", alpha=0.8,
     )
-    ax1.set_title("Aggregate Markup Over Time", fontsize=14, fontweight="bold")
-    ax1.set_ylabel("Markup", fontsize=12)
-    ax1.grid(True, alpha=0.3)
-    ax1.legend(loc="best")
 
-    # Bottom panel: Decomposition
-    ax2 = axes[1]
-
-    if decomp_type.lower() == "fhk":
-        components = ["within", "between", "cross", "entry", "exit"]
-    else:
-        components = ["surviving", "entry", "exit"]
-
-    decomp_plot = decomposition[components].copy()
-    if "exit" in components:
-        decomp_plot["exit"] = -decomp_plot["exit"]
-
-    colors = plt.cm.Set3(range(len(components)))
-    decomp_plot.plot(kind="bar", stacked=True, ax=ax2, color=colors, edgecolor="black")
-
+    # Overlay aggregate change as line
     if "aggregate_change" in decomposition.columns:
-        ax2.plot(
+        ax.plot(
             range(len(decomposition)),
-            decomposition["aggregate_change"],
-            color="red",
-            marker="o",
-            linewidth=2,
-            markersize=6,
+            decomposition["aggregate_change"].values,
+            color="black", marker="o", linewidth=2, markersize=4,
             label="Total Change",
         )
 
-    ax2.set_title("Decomposition of Markup Changes", fontsize=14, fontweight="bold")
-    ax2.set_xlabel("Period", fontsize=12)
-    ax2.set_ylabel("Contribution to Change", fontsize=12)
-    ax2.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
-    ax2.legend(loc="best")
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xticklabels(decomposition.index, rotation=45, ha="right")
+    ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.set_ylabel("Markup Change")
+    ax.set_title(title)
+    ax.legend(["Within", "Reallocation", "Net Entry", "Total Change"])
+    ax.grid(True, alpha=0.3)
 
-    plt.tight_layout()
+    # Thin out x-axis labels for readability
+    tick_labels = [str(int(x)) if i % 5 == 0 else "" for i, x in enumerate(decomposition.index)]
+    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+
+    fig.tight_layout()
 
     if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        logger.info(f"Saved component contributions plot to {save_path}")
 
     return fig

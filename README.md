@@ -61,10 +61,19 @@ Data preparation for the scatter plot (CAGR computation, firm filtering) is hand
 
 ### 6. Decomposition
 
-Decomposes aggregate markup changes into within-firm, reallocation, and entry/exit components:
+Dynamic Olley-Pakes decomposition of period-to-period aggregate markup changes:
 
-- **FHK** (Foster-Haltiwanger-Krizan)
-- **Melitz-Polanec**
+```
+Δμ_t = Δwithin + Δreallocation + Δnet_entry
+```
+
+| Component | Formula | Interpretation |
+|-----------|---------|----------------|
+| Within | Σ m_{i,t-1} · Δμ_{i,t} | Markup changes at base-period shares |
+| Reallocation | Σ μ̃_{i,t-1} · Δm_{i,t} + Σ Δμ · Δm | Market share shifts toward high/low-markup firms |
+| Net Entry | Σ_{E} μ̃ · m - Σ_{X} μ̃ · m | Difference between entrants and exiters |
+
+Visualization: `plot_decomposition()` (4-line cumulative chart), `plot_component_contributions()` (stacked bar).
 
 ## Quick Start
 
@@ -86,6 +95,7 @@ results = pipeline.run()
 ```bash
 uv run python tests/test_pipeline_real.py   # Full pipeline (data prep → estimation → markups)
 uv run python tests/test_figures.py          # Figure generation
+uv run python tests/test_decomposition.py   # OP decomposition + visualization
 just test                                    # Unit tests
 just qa                                      # Format, lint, type check, test
 ```
@@ -98,7 +108,7 @@ src/PyMarkup/
 ├── data/              # Data downloaders and loaders
 ├── estimators/        # WooldridgeIV, CostShare, ACF estimators
 ├── pipeline/          # MarkupPipeline orchestrator, config
-├── decomposition/     # FHK and Melitz-Polanec decomposition
+├── decomposition/     # Dynamic Olley-Pakes decomposition + visualization
 ├── io/                # I/O schemas (Pydantic)
 └── cli/               # CLI commands
 

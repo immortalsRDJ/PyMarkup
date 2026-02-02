@@ -19,8 +19,7 @@ Estimators (for researchers who want control):
     ProductionFunctionEstimator : Base class for all estimators
 
 Decomposition (analyze markup trends):
-    FHKDecomposition : Foster-Haltiwanger-Krizan decomposition
-    MelitzDecomposition : Melitz-Polanec decomposition
+    OlleyPakesDecomposition : Olley-Pakes decomposition (DLEU 2020)
     aggregate_markup_trends : Calculate aggregate trends
     plot_decomposition : Visualize decomposition results
 
@@ -44,10 +43,10 @@ High-level pipeline API:
 
 Decomposition analysis:
 
->>> from PyMarkup.decomposition import FHKDecomposition, plot_decomposition
->>> fhk = FHKDecomposition()
->>> decomp_results = fhk.decompose(firm_markups)
->>> fig = plot_decomposition(decomp_results, save_path="decomp.png")
+>>> from PyMarkup.decomposition import OlleyPakesDecomposition
+>>> op = OlleyPakesDecomposition()
+>>> decomp_results = op.decompose(firm_markups)
+>>> print(decomp_results[["unweighted_mean", "op_covariance"]])
 
 Low-level estimator API:
 
@@ -60,8 +59,7 @@ Low-level estimator API:
 
 from PyMarkup._version import __version__
 from PyMarkup.decomposition import (
-    FHKDecomposition,
-    MelitzDecomposition,
+    OlleyPakesDecomposition,
     aggregate_markup_trends,
     plot_component_contributions,
     plot_decomposition,
@@ -91,8 +89,7 @@ __all__ = [
     "CostShareEstimator",
     "ACFEstimator",
     # Decomposition
-    "FHKDecomposition",
-    "MelitzDecomposition",
+    "OlleyPakesDecomposition",
     "aggregate_markup_trends",
     "plot_decomposition",
     "plot_component_contributions",
