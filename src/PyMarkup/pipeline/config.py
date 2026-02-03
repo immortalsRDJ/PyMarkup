@@ -100,6 +100,9 @@ class PipelineConfig:
     # Estimator configuration
     estimator: EstimatorConfig = field(default_factory=EstimatorConfig)
 
+    # Markup calculation
+    cost_share_type: Literal["cogs_only", "with_sga"] = "cogs_only"
+
     # Data processing
     include_interest_cogs: bool = False
     trim_percentiles: tuple[float, float] = (0.01, 0.99)
@@ -172,6 +175,7 @@ class PipelineConfig:
                 "industry_level": self.estimator.industry_level,
                 "min_observations": self.estimator.min_observations,
             },
+            "cost_share_type": self.cost_share_type,
             "include_interest_cogs": self.include_interest_cogs,
             "trim_percentiles": list(self.trim_percentiles),
             "output_dir": str(self.output_dir),
@@ -211,6 +215,7 @@ class PipelineConfig:
                 window_years=5,
                 industry_level=2,
             ),
+            cost_share_type="cogs_only",
             include_interest_cogs=False,
             trim_percentiles=(0.01, 0.99),
             output_dir=data_root / "Output",

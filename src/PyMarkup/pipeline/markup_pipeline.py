@@ -178,7 +178,7 @@ class MarkupPipeline:
                 markups = compute_markups(
                     elasticities=elast,
                     panel_data=self.panel_data,
-                    cost_share_type="cogs_only",  # TODO: Make configurable
+                    cost_share_type=self.config.cost_share_type,
                 )
                 all_markups[name] = markups
                 logger.info(f"✓ {name}: computed markups for {len(markups)} firm-years")
@@ -240,7 +240,10 @@ class MarkupPipeline:
                 logger.info(f"\nFigure 2 ({name}): PPI vs markup scatter")
                 try:
                     scatter = prepare_scatter_data(
-                        markups, self.panel_data, ppi_data, cpi_data,
+                        markups,
+                        self.panel_data,
+                        ppi_data,
+                        cpi_data,
                     )
                     if len(scatter) > 0:
                         fig2 = plot_markup_vs_ppi(

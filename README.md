@@ -77,6 +77,8 @@ Visualization: `plot_decomposition()` (4-line cumulative chart), `plot_component
 
 ## Quick Start
 
+### Full Pipeline
+
 ```python
 from PyMarkup import MarkupPipeline, PipelineConfig, EstimatorConfig
 
@@ -88,17 +90,64 @@ config = PipelineConfig(
 
 pipeline = MarkupPipeline(config)
 results = pipeline.run()
+results.save(output_dir="Output/", format="csv")
 ```
 
-## Testing
+### Individual Estimators
 
-```bash
-uv run python tests/test_pipeline_real.py   # Full pipeline (data prep → estimation → markups)
-uv run python tests/test_figures.py          # Figure generation
-uv run python tests/test_decomposition.py   # OP decomposition + visualization
-just test                                    # Unit tests
-just qa                                      # Format, lint, type check, test
+```python
+from PyMarkup.estimators import WooldridgeIVEstimator, CostShareEstimator, ACFEstimator
+from PyMarkup.io import InputData
+
+data = InputData.from_compustat("Input/DLEU/Compustat_annual.dta")
+
+# Wooldridge IV (main method)
+estimator = WooldridgeIVEstimator(specification="spec2")
+elasticities = estimator.estimate_elasticities(data)
+
+# Cost Share (fast baseline)
+cs = CostShareEstimator()
+cs_elasticities = cs.estimate_elasticities(data)
+
+# ACF (robustness)
+acf = ACFEstimator(include_market_share=True)
+acf_elasticities = acf.estimate_elasticities(data)
 ```
+
+### Decomposition
+
+```python
+from PyMarkup.decomposition import OlleyPakesDecomposition, plot_decomposition
+
+op = OlleyPakesDecomposition()
+decomp_results = op.decompose(firm_markups)
+print(decomp_results[["unweighted_mean", "op_covariance"]])
+
+plot_decomposition(decomp_results, output_path="Output/decomposition.pdf")
+```
+
+### Data Download
+
+```python
+from PyMarkup.data import download_compustat, download_cpi, download_ppi, load_config
+
+config = load_config("config.yaml")
+download_compustat(config)  # Requires WRDS credentials
+download_cpi(config)        # Requires FRED API key
+download_ppi(config)        # No credentials needed
+```
+
+## Configuration
+
+### Credentials (`config.yaml`)
+
+```yaml
+fred_api_key: "your-fred-api-key"
+wrds_username: "your-wrds-username"
+```
+
+Or via environment variables: `FRED_API_KEY`, `WRDS_USERNAME`.
+
 
 ## Project Structure
 

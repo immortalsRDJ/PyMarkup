@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -99,8 +100,9 @@ def aggregate_markups(
     elif method == "weighted_mean":
         if weights is None:
             raise ValueError("weights must be provided for weighted_mean")
-        # TODO: Implement weighted mean aggregation
-        raise NotImplementedError("Weighted mean not yet implemented")
+        df = firm_markups.copy()
+        df["_w"] = weights
+        agg = df.groupby(by).apply(lambda g: np.average(g["markup"], weights=g["_w"])).reset_index(name="markup")
     else:
         raise ValueError(f"Unknown aggregation method: {method}")
 

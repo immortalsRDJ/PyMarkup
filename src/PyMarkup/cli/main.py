@@ -27,7 +27,9 @@ console = Console()
 @app.command()
 def estimate(
     config: Path = typer.Option(None, "--config", "-c", help="YAML config file path"),
-    method: str = typer.Option("wooldridge_iv", "--method", "-m", help="Estimation method (wooldridge_iv, cost_share, acf, all)"),
+    method: str = typer.Option(
+        "wooldridge_iv", "--method", "-m", help="Estimation method (wooldridge_iv, cost_share, acf, all)"
+    ),
     compustat: Path = typer.Option(None, "--compustat", help="Path to Compustat data"),
     macro_vars: Path = typer.Option(None, "--macro-vars", help="Path to macro variables"),
     output: Path = typer.Option("output/", "--output", "-o", help="Output directory"),
@@ -120,17 +122,45 @@ def version():
 
 @app.command()
 def download(
-    dataset: str = typer.Argument(..., help="Dataset to download (compustat, cpi, ppi)"),
+    dataset: str = typer.Argument(..., help="Dataset to download (compustat, cpi, ppi, all)"),
     output: Path = typer.Option("Input/", "--output", "-o", help="Output directory"),
+    config: Path = typer.Option(None, "--config", "-c", help="Credentials YAML config file"),
 ):
     """
     Download data from WRDS, FRED, or BLS.
 
-    Example:
+    Examples:
         $ pymarkup download compustat --output Input/
+        $ pymarkup download all --config config.yaml
+        $ pymarkup download cpi
+        $ pymarkup download ppi
     """
-    console.print(f"[yellow]Download functionality not yet implemented for {dataset}[/yellow]")
-    # TODO: Implement downloaders
+    from PyMarkup.data import download_all, download_compustat, download_cpi, download_ppi, load_config
+
+    cfg = load_config(config)
+
+    downloaders = {
+        "compustat": download_compustat,
+        "cpi": download_cpi,
+        "ppi": download_ppi,
+    }
+
+    try:
+        if dataset == "all":
+            console.print("[blue]Downloading all datasets...[/blue]")
+            download_all(config=cfg)
+        elif dataset in downloaders:
+            console.print(f"[blue]Downloading {dataset}...[/blue]")
+            downloaders[dataset](config=cfg, output_dir=output)
+        else:
+            console.print(f"[red]Unknown dataset: {dataset}. Choose from: compustat, cpi, ppi, all[/red]")
+            raise typer.Exit(1)
+
+        console.print("[green]Download complete.[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Download failed: {e}[/red]")
+        raise typer.Exit(1) from e
 
 
 if __name__ == "__main__":
