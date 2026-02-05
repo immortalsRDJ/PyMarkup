@@ -258,6 +258,76 @@ class MarkupPipeline:
                 except Exception as exc:
                     logger.error(f"  Figure 2 ({name}) failed: {exc}")
 
+    def run_download(
+        self,
+        skip_compustat: bool = False,
+        skip_cpi: bool = False,
+        skip_ppi: bool = False,
+    ) -> dict:
+        """
+        Download data from WRDS, FRED, and BLS.
+
+        Parameters
+        ----------
+        skip_compustat : bool
+            Skip Compustat download (requires WRDS credentials)
+        skip_cpi : bool
+            Skip CPI download (requires FRED API key)
+        skip_ppi : bool
+            Skip PPI download (no credentials needed)
+
+        Returns
+        -------
+        dict
+            Dictionary mapping source name to (annual_path, quarterly_path)
+        """
+        from PyMarkup.data import download_all
+
+        logger.info("=" * 80)
+        logger.info("STEP 0: Data Download")
+        logger.info("=" * 80)
+
+        data_config = self.config.to_data_config()
+        return download_all(
+            config=data_config,
+            skip_compustat=skip_compustat,
+            skip_cpi=skip_cpi,
+            skip_ppi=skip_ppi,
+        )
+
+    def _load_price_indices(self) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+        """
+        Load PPI and CPI data if available.
+
+        Returns
+        -------
+        tuple
+            (ppi_data, cpi_data) - either may be None if file not found
+        """
+        from PyMarkup.data.loaders import load_cpi, load_ppi
+
+        ppi_path = self.config.data_dir / "PPI" / "PPI_annual.csv"
+        cpi_path = self.config.data_dir / "CPI" / "CPI_annual.csv"
+
+        ppi_data = None
+        cpi_data = None
+
+        if ppi_path.exists():
+            try:
+                ppi_data = load_ppi(ppi_path)
+                logger.info(f"Loaded PPI data from {ppi_path}")
+            except Exception as e:
+                logger.warning(f"Could not load PPI data: {e}")
+
+        if cpi_path.exists():
+            try:
+                cpi_data = load_cpi(cpi_path)
+                logger.info(f"Loaded CPI data from {cpi_path}")
+            except Exception as e:
+                logger.warning(f"Could not load CPI data: {e}")
+
+        return ppi_data, cpi_data
+
     def run(self) -> MarkupResults:
         """
         Execute the full pipeline.
@@ -292,3 +362,71 @@ class MarkupPipeline:
         )
 
         return self.results
+
+    def run_all(
+        self,
+        download: bool = True,
+        skip_compustat: bool = False,
+        skip_cpi: bool = False,
+        skip_ppi: bool = False,
+        generate_figures: bool = True,
+    ) -> MarkupResults:
+        """
+        Execute the complete end-to-end pipeline.
+
+        This method runs all steps in sequence:
+        1. Download data (optional)
+        2. Data preparation
+        3. Elasticity estimation
+        4. Markup calculation
+        5. Figure generation (optional)
+
+        Parameters
+        ----------
+        download : bool
+            Whether to run data download step (default True)
+        skip_compustat : bool
+            Skip Compustat download (use existing data)
+        skip_cpi : bool
+            Skip CPI download (use existing data)
+        skip_ppi : bool
+            Skip PPI download (use existing data)
+        generate_figures : bool
+            Whether to generate output figures (default True)
+
+        Returns
+        -------
+        MarkupResults
+            Results object containing markups, elasticities, and metadata
+
+        Examples
+        --------
+        >>> config = PipelineConfig(
+        ...     compustat_path="Input/DLEU/Compustat_annual.dta",
+        ...     macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
+        ...     fred_api_key="your-key",
+        ... )
+        >>> pipeline = MarkupPipeline(config)
+        >>> results = pipeline.run_all(download=True, generate_figures=True)
+        """
+        logger.info("\n" + "=" * 80)
+        logger.info("PyMarkup Full Pipeline")
+        logger.info("=" * 80)
+
+        # Step 0: Download (optional)
+        if download:
+            self.run_download(
+                skip_compustat=skip_compustat,
+                skip_cpi=skip_cpi,
+                skip_ppi=skip_ppi,
+            )
+
+        # Steps 1-3: Core pipeline
+        results = self.run()
+
+        # Step 4: Figures (optional)
+        if generate_figures:
+            ppi_data, cpi_data = self._load_price_indices()
+            self.run_figures(results.markups, ppi_data, cpi_data)
+
+        return results

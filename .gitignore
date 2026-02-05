@@ -210,7 +210,13 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Project data directories (large binaries not tracked in git)
-Input/
+Input/*
+!Input/DLEU/
+Input/DLEU/*
+!Input/DLEU/macro_vars_new.xlsx
+!Input/Other/
+Input/Other/*
+!Input/Other/NAICS_2D_Description.xlsx
 Intermediate/
 Output/
 

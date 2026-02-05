@@ -163,5 +163,91 @@ def download(
         raise typer.Exit(1) from e
 
 
+@app.command("run-all")
+def run_all(
+    config: Path = typer.Option(None, "--config", "-c", help="YAML config file path"),
+    method: str = typer.Option(
+        "wooldridge_iv", "--method", "-m", help="Estimation method (wooldridge_iv, cost_share, acf, all)"
+    ),
+    compustat: Path = typer.Option(None, "--compustat", help="Path to Compustat data"),
+    macro_vars: Path = typer.Option(None, "--macro-vars", help="Path to macro variables"),
+    output: Path = typer.Option("Output/", "--output", "-o", help="Output directory"),
+    skip_download: bool = typer.Option(False, "--skip-download", help="Skip data download step"),
+    skip_compustat: bool = typer.Option(False, "--skip-compustat", help="Skip Compustat download (use existing)"),
+    skip_cpi: bool = typer.Option(False, "--skip-cpi", help="Skip CPI download (use existing)"),
+    skip_ppi: bool = typer.Option(False, "--skip-ppi", help="Skip PPI download (use existing)"),
+    no_figures: bool = typer.Option(False, "--no-figures", help="Skip figure generation"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+):
+    """
+    Run the complete pipeline: download -> estimate -> figures.
+
+    This command runs all steps in one go:
+    1. Download data from WRDS, FRED, BLS (unless --skip-download)
+    2. Prepare and clean Compustat panel data
+    3. Estimate production function elasticities
+    4. Calculate firm-level markups
+    5. Generate output figures (unless --no-figures)
+
+    Examples:
+        # Full pipeline with config file
+        $ pymarkup run-all --config pipeline_config.yaml
+
+        # Skip download (use existing data)
+        $ pymarkup run-all --config config.yaml --skip-download
+
+        # Skip only Compustat download (WRDS credentials not needed)
+        $ pymarkup run-all --config config.yaml --skip-compustat
+
+        # Command-line arguments (skip download)
+        $ pymarkup run-all --compustat Input/DLEU/Compustat_annual.dta \\
+            --macro-vars Input/DLEU/macro_vars_new.xlsx --skip-download
+    """
+    if verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    # Load or create config
+    if config:
+        console.print(f"[blue]Loading configuration from {config}[/blue]")
+        cfg = PipelineConfig.from_yaml(config)
+        cfg.output_dir = output  # Override output dir
+    else:
+        if not compustat or not macro_vars:
+            console.print("[red]Error: --compustat and --macro-vars required when not using --config[/red]")
+            raise typer.Exit(1)
+
+        cfg = PipelineConfig(
+            compustat_path=compustat,
+            macro_vars_path=macro_vars,
+            estimator=EstimatorConfig(method=method),
+            output_dir=output,
+        )
+
+    # Run full pipeline
+    console.print("\n[bold green]Starting PyMarkup full pipeline...[/bold green]\n")
+
+    try:
+        pipeline = MarkupPipeline(cfg)
+        results = pipeline.run_all(
+            download=not skip_download,
+            skip_compustat=skip_compustat,
+            skip_cpi=skip_cpi,
+            skip_ppi=skip_ppi,
+            generate_figures=not no_figures,
+        )
+
+        # Save results
+        console.print(f"\n[bold green]Saving results to {output}...[/bold green]")
+        results.save(output_dir=output, format="csv")
+
+        console.print("\n[bold green]✓ Full pipeline completed successfully![/bold green]\n")
+
+    except Exception as e:
+        console.print(f"\n[bold red]✗ Pipeline failed: {e}[/bold red]\n")
+        if verbose:
+            console.print_exception()
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

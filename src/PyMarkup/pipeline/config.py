@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -111,15 +112,41 @@ class PipelineConfig:
     output_dir: Path = Path("output/")
     save_intermediate: bool = True
 
+    # Download settings (optional, for run_all)
+    fred_api_key: str = ""
+    wrds_username: str = ""
+    data_dir: Path = field(default_factory=lambda: Path("Input"))
+
+    # Pipeline behavior
+    generate_figures: bool = False
+
     def __post_init__(self):
         """Convert strings to Path objects and validate."""
         self.compustat_path = Path(self.compustat_path)
         self.macro_vars_path = Path(self.macro_vars_path)
         self.output_dir = Path(self.output_dir)
+        self.data_dir = Path(self.data_dir)
+
+        # Load credentials from environment if not provided
+        if not self.fred_api_key:
+            self.fred_api_key = os.getenv("FRED_API_KEY", "")
+        if not self.wrds_username:
+            self.wrds_username = os.getenv("WRDS_USERNAME", "")
 
         # Validate percentiles
         if not (0 <= self.trim_percentiles[0] < self.trim_percentiles[1] <= 1):
             raise ValueError(f"Invalid trim_percentiles: {self.trim_percentiles}")
+
+    def to_data_config(self):
+        """Convert to DataConfig for use with downloaders."""
+        from PyMarkup.data.config import DataConfig
+
+        return DataConfig(
+            fred_api_key=self.fred_api_key,
+            wrds_username=self.wrds_username,
+            data_dir=self.data_dir,
+            intermediate_dir=self.output_dir / "intermediate",
+        )
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> PipelineConfig:
@@ -180,7 +207,15 @@ class PipelineConfig:
             "trim_percentiles": list(self.trim_percentiles),
             "output_dir": str(self.output_dir),
             "save_intermediate": self.save_intermediate,
+            # Download settings (only save if non-empty)
+            "data_dir": str(self.data_dir),
+            "generate_figures": self.generate_figures,
         }
+        # Only include credentials if set (don't save empty strings)
+        if self.fred_api_key:
+            data["fred_api_key"] = self.fred_api_key
+        if self.wrds_username:
+            data["wrds_username"] = self.wrds_username
 
         with open(path, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
@@ -220,4 +255,6 @@ class PipelineConfig:
             trim_percentiles=(0.01, 0.99),
             output_dir=data_root / "Output",
             save_intermediate=True,
+            data_dir=data_root / "Input",
+            generate_figures=True,
         )
