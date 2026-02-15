@@ -26,7 +26,7 @@ The easiest way to use PyMarkup is with `run_all()`, which handles the entire pi
 from PyMarkup import MarkupPipeline, PipelineConfig
 
 config = PipelineConfig(
-    compustat_path="Input/DLEU/Compustat_annual.dta",
+    compustat_path="Input/DLEU/Compustat_annual.csv",
     macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
     fred_api_key="your-fred-api-key",      # Or set FRED_API_KEY env var
     data_dir="Input",
@@ -62,7 +62,7 @@ If you prefer more control, run each step separately:
 from PyMarkup import MarkupPipeline, PipelineConfig, EstimatorConfig
 
 config = PipelineConfig(
-    compustat_path="Input/DLEU/Compustat_annual.dta",
+    compustat_path="Input/DLEU/Compustat_annual.csv",
     macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
     estimator=EstimatorConfig(method="wooldridge_iv"),
 )
@@ -193,7 +193,7 @@ pymarkup download ppi                        # PPI only, no credentials
 pymarkup download cpi --config config.yaml   # CPI only
 
 # Validate input data
-pymarkup validate Input/DLEU/Compustat_annual.dta
+pymarkup validate Input/DLEU/Compustat_annual.csv
 ```
 
 ## Project Structure

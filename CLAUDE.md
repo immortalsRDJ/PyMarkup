@@ -70,6 +70,13 @@ download_cpi(config)       # Uses fredapi
 download_compustat(config) # Uses wrds library, prompts for credentials interactively
 ```
 
+Output files (all CSV format):
+| Downloader | Output Files |
+|------------|--------------|
+| `download_compustat()` | `Input/DLEU/Compustat_annual.csv`, `Compustat_quarterly.csv` |
+| `download_cpi()` | `Input/CPI/CPI_annual.csv`, `CPI_quarterly.csv` |
+| `download_ppi()` | `Input/PPI/PPI_annual.csv`, `PPI_quarterly.csv` |
+
 Key improvements in new downloaders:
 - **No browser required**: PPI download uses `requests` instead of playwright
 - **Interactive credentials**: Compustat prompts for WRDS username/password if not in `.pgpass`

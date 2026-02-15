@@ -38,7 +38,7 @@ def download_compustat(
     Returns
     -------
     tuple[Path, Path]
-        Paths to annual and quarterly Stata files
+        Paths to annual and quarterly CSV files
     """
     try:
         import wrds
@@ -96,12 +96,12 @@ def download_compustat(
     finally:
         raw_conn.close()
 
-    annual_path = output_dir / "Compustat_annual.dta"
-    df_annual.to_stata(annual_path, write_index=False)
+    annual_path = output_dir / "Compustat_annual.csv"
+    df_annual.to_csv(annual_path, index=False)
     logger.info(f"Saved annual data to {annual_path}")
 
-    quarterly_path = output_dir / "Compustat_quarterly.dta"
-    df_quarterly.to_stata(quarterly_path, write_index=False)
+    quarterly_path = output_dir / "Compustat_quarterly.csv"
+    df_quarterly.to_csv(quarterly_path, index=False)
     logger.info(f"Saved quarterly data to {quarterly_path}")
 
     db.close()

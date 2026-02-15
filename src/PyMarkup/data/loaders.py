@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 def load_compustat(path: Path, frequency: str = "annual") -> pd.DataFrame:
     """
-    Load Compustat data from Stata file.
+    Load Compustat data from CSV file.
 
     Parameters
     ----------
     path : Path
-        Path to Compustat .dta file
+        Path to Compustat CSV file
     frequency : str
         "annual" or "quarterly"
 
@@ -29,7 +29,7 @@ def load_compustat(path: Path, frequency: str = "annual") -> pd.DataFrame:
     logger.info(f"Loading Compustat ({frequency}) from {path}")
     if not path.exists():
         raise FileNotFoundError(f"Compustat file not found: {path}")
-    return pd.read_stata(path)
+    return pd.read_csv(path)
 
 
 def load_macro_vars(path: Path) -> pd.DataFrame:
