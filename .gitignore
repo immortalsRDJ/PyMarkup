@@ -226,3 +226,6 @@ config.yaml
 # macOS metadata
 .DS_Store
 **/.DS_Store
+
+# Auxiliary replication code (not for distribution)
+src/BMYReplication/
