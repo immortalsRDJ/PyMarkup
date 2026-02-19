@@ -144,6 +144,47 @@ estimator = WooldridgeIVEstimator(specification="spec2")
 elasticities = estimator.estimate_elasticities(panel_data)
 ```
 
+#### SG&A Configuration
+
+All three estimators support including SG&A (Selling, General & Administrative expenses) as a third input in the production function:
+
+| Estimator | Parameter | Options | Default |
+|-----------|-----------|---------|---------|
+| Wooldridge IV | `specification` | `"spec1"` (COGS+K), `"spec2"` (COGS+K+SG&A) | `"spec2"` |
+| Cost Share | `include_sga` | `True`, `False` | `False` |
+| ACF | `include_sga` | `True`, `False` | `False` |
+
+```python
+from PyMarkup.estimators import ACFEstimator, CostShareEstimator, WooldridgeIVEstimator
+
+# Wooldridge IV: use spec2 for 3-input (COGS + Capital + SG&A)
+iv_est = WooldridgeIVEstimator(specification="spec2")
+
+# Cost Share: include SG&A in cost share calculation
+cs_est = CostShareEstimator(include_sga=True)
+
+# ACF: include SG&A as third input
+acf_est = ACFEstimator(include_sga=True)
+```
+
+Via pipeline config:
+
+```python
+from PyMarkup import PipelineConfig, EstimatorConfig
+
+config = PipelineConfig(
+    compustat_path="Input/DLEU/Compustat_annual.csv",
+    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
+    estimator=EstimatorConfig(
+        method="all",
+        iv_specification="spec2",    # Wooldridge IV with SG&A
+        cs_include_sga=True,         # Cost Share with SG&A
+        acf_include_sga=True,        # ACF with SG&A
+    ),
+    cost_share_type="with_sga",      # Markup calculation includes SG&A
+)
+```
+
 ### 4. Markup Calculation
 
 Computes firm-level markups:

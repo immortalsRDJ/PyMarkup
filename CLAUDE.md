@@ -32,8 +32,6 @@ src/PyMarkup/
 ├── pipeline/                # MarkupPipeline orchestrator, config
 ├── io/                      # I/O schemas (Pydantic)
 └── cli/                     # CLI commands
-
-src/BMYReplication/          # Python translations of original Stata code
 ```
 
 Data directories (not version controlled):
@@ -89,6 +87,18 @@ Key improvements in new downloaders:
 | Wooldridge IV | `WooldridgeIVEstimator` | Main research method, addresses endogeneity |
 | Cost Share | `CostShareEstimator` | Fast benchmarking, no estimation needed |
 | ACF | `ACFEstimator` | Robustness checks, handles selection bias |
+
+### SG&A Configuration
+
+All estimators support including SG&A as a third input:
+
+| Estimator | Parameter | Options |
+|-----------|-----------|---------|
+| Wooldridge IV | `specification` | `"spec1"` (no SG&A), `"spec2"` (with SG&A) |
+| Cost Share | `include_sga` | `True` / `False` |
+| ACF | `include_sga` | `True` / `False` |
+
+Config options: `iv_specification`, `cs_include_sga`, `acf_include_sga`
 
 ## Data Requirements
 
