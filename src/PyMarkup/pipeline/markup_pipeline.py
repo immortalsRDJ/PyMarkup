@@ -85,6 +85,7 @@ class MarkupPipeline:
             self.estimators["acf"] = ACFEstimator(
                 window_years=self.config.estimator.window_years,
                 include_market_share=self.config.estimator.acf_include_market_share,
+                include_sga=self.config.estimator.acf_include_sga,
                 industry_level=self.config.estimator.industry_level,
                 min_observations=self.config.estimator.min_observations,
             )

@@ -27,6 +27,8 @@ class EstimatorConfig:
         Cost share: aggregation method ("median", "mean", "weighted_mean")
     acf_include_market_share : bool
         ACF: include market share controls in first stage
+    acf_include_sga : bool
+        ACF: include SG&A as third input in production function
     window_years : int
         Rolling window size in years (for IV and ACF)
     industry_level : int
@@ -46,6 +48,7 @@ class EstimatorConfig:
 
     # ACF settings
     acf_include_market_share: bool = True
+    acf_include_sga: bool = False
 
     # Common settings
     window_years: int = 5
@@ -198,6 +201,7 @@ class PipelineConfig:
                 "cs_include_sga": self.estimator.cs_include_sga,
                 "cs_aggregation": self.estimator.cs_aggregation,
                 "acf_include_market_share": self.estimator.acf_include_market_share,
+                "acf_include_sga": self.estimator.acf_include_sga,
                 "window_years": self.estimator.window_years,
                 "industry_level": self.estimator.industry_level,
                 "min_observations": self.estimator.min_observations,

@@ -33,6 +33,8 @@ class ACFEstimator(ProductionFunctionEstimator):
         Rolling window size in years (default: 5 = ±2 years)
     include_market_share : bool
         Include market share controls in first stage (default: True)
+    include_sga : bool
+        Include SG&A as a third input in production function (default: False)
     industry_level : int
         NAICS digit level for industry grouping (2, 3, or 4)
     min_observations : int
@@ -48,6 +50,10 @@ class ACFEstimator(ProductionFunctionEstimator):
     >>> estimator = ACFEstimator(window_years=5, include_market_share=True)
     >>> elasticities = estimator.estimate_elasticities(panel_data)
 
+    >>> # With SG&A as third input
+    >>> estimator = ACFEstimator(include_sga=True)
+    >>> elasticities = estimator.estimate_elasticities(panel_data)
+
     References
     ----------
     Ackerberg, D. A., Caves, K., & Frazer, G. (2015). Identification properties
@@ -58,6 +64,7 @@ class ACFEstimator(ProductionFunctionEstimator):
         self,
         window_years: int = 5,
         include_market_share: bool = True,
+        include_sga: bool = False,
         industry_level: int = 2,
         min_observations: int = 15,
     ):
@@ -66,13 +73,15 @@ class ACFEstimator(ProductionFunctionEstimator):
 
         self.window_years = window_years
         self.include_market_share = include_market_share
+        self.include_sga = include_sga
         self.industry_level = industry_level
         self.min_observations = min_observations
         self.results_ = None
 
     def get_method_name(self) -> str:
         """Return method name."""
-        return "ACF (Ackerberg-Caves-Frazer)"
+        sga_str = " with SG&A" if self.include_sga else ""
+        return f"ACF (Ackerberg-Caves-Frazer{sga_str})"
 
     def _preprocess(self, data: pd.DataFrame) -> pd.DataFrame:
         """Prepare data for ACF estimation."""
@@ -92,10 +101,22 @@ class ACFEstimator(ProductionFunctionEstimator):
         df["k2"] = df["k"] ** 2
         df["ck"] = df["c"] * df["k"]
 
+        # SG&A (if using include_sga)
+        if self.include_sga:
+            df["s"] = safe_log(df["xsga_D"])
+            df["s2"] = df["s"] ** 2
+            df["sk"] = df["s"] * df["k"]
+            df["sc"] = df["s"] * df["c"]
+
         # Lags
-        df = add_lags(df, group="id", time="year", cols=["c", "k"])
+        lag_cols = ["c", "k"]
+        if self.include_sga:
+            lag_cols.append("s")
+        df = add_lags(df, group="id", time="year", cols=lag_cols)
         df["c_lag"] = df["L.c"]
         df["k_lag"] = df["L.k"]
+        if self.include_sga:
+            df["s_lag"] = df["L.s"]
 
         return df
 
@@ -114,7 +135,8 @@ class ACFEstimator(ProductionFunctionEstimator):
         Parameters
         ----------
         betas : np.ndarray
-            Parameter vector [intercept, beta_c, beta_k]
+            Parameter vector [intercept, beta_c, beta_k] or
+            [intercept, beta_c, beta_k, beta_s] if include_sga=True
         phi : np.ndarray
             Productivity proxy (current period)
         phi_lag : np.ndarray
@@ -154,10 +176,13 @@ class ACFEstimator(ProductionFunctionEstimator):
         Returns
         -------
         dict or None
-            Dictionary with keys: theta_c, theta_k
+            Dictionary with keys: theta_c, theta_k (and theta_s if include_sga)
         """
         # First stage: estimate productivity proxy (phi)
         phi_reg_cols = ["c", "c2", "k", "k2", "ck"]
+
+        if self.include_sga:
+            phi_reg_cols.extend(["s", "s2", "sk", "sc"])
 
         if self.include_market_share:
             phi_reg_cols.extend(["ms2d", "ms4d"])
@@ -184,25 +209,39 @@ class ACFEstimator(ProductionFunctionEstimator):
         df["phi_lag"] = df.groupby("id")["phi"].shift(1)
 
         # Prepare data for GMM second stage
-        work = df.dropna(subset=["phi", "phi_lag", "c", "k", "c_lag", "k_lag"])
+        dropna_cols = ["phi", "phi_lag", "c", "k", "c_lag", "k_lag"]
+        if self.include_sga:
+            dropna_cols.extend(["s", "s_lag"])
+        work = df.dropna(subset=dropna_cols)
         if work.empty or len(work) < self.min_observations:
             return None
 
         PHI = work["phi"].to_numpy()
         PHI_LAG = work["phi_lag"].to_numpy()
-        X = np.column_stack([np.ones(len(work)), work["c"], work["k"]])
-        X_lag = np.column_stack([np.ones(len(work)), work["c_lag"], work["k_lag"]])
-        Z = np.column_stack([np.ones(len(work)), work["c_lag"], work["k"]])
+
+        if self.include_sga:
+            X = np.column_stack([np.ones(len(work)), work["c"], work["k"], work["s"]])
+            X_lag = np.column_stack([np.ones(len(work)), work["c_lag"], work["k_lag"], work["s_lag"]])
+            Z = np.column_stack([np.ones(len(work)), work["c_lag"], work["k"], work["s_lag"]])
+            x0 = np.array([0.0, 0.9, 0.1, 0.05])
+        else:
+            X = np.column_stack([np.ones(len(work)), work["c"], work["k"]])
+            X_lag = np.column_stack([np.ones(len(work)), work["c_lag"], work["k_lag"]])
+            Z = np.column_stack([np.ones(len(work)), work["c_lag"], work["k"]])
+            x0 = np.array([0.0, 0.9, 0.1])
 
         # GMM optimization
         def objective(betas: np.ndarray) -> float:
             return self._gmm_objective(betas, PHI, PHI_LAG, Z, X, X_lag)
 
         try:
-            res = scipy.optimize.minimize(objective, x0=np.array([0.0, 0.9, 0.1]), method="Nelder-Mead")
+            res = scipy.optimize.minimize(objective, x0=x0, method="Nelder-Mead")
             if not res.success:
                 return None
-            return {"theta_c": res.x[1], "theta_k": res.x[2]}
+            result = {"theta_c": res.x[1], "theta_k": res.x[2]}
+            if self.include_sga:
+                result["theta_s"] = res.x[3]
+            return result
         except Exception as exc:
             logger.warning(f"GMM optimization failed: {exc}")
             return None
@@ -216,6 +255,7 @@ class ACFEstimator(ProductionFunctionEstimator):
         data : pd.DataFrame
             Prepared panel data with required columns:
             - gvkey, year, sale_D, cogs_D, capital_D
+            - xsga_D (required if include_sga=True)
             - ind2d, nrind2 (or ind3d/nrind3, ind4d/nrind4)
             - ms2d, ms4d (market shares, optional if include_market_share=False)
 
@@ -227,9 +267,12 @@ class ACFEstimator(ProductionFunctionEstimator):
             - year: fiscal year
             - theta_c: COGS elasticity
             - theta_k: capital elasticity
+            - theta_s: SG&A elasticity (only if include_sga=True)
         """
         logger.info(f"Starting {self.get_method_name()} estimation")
         logger.info(f"Window size: {self.window_years} years, Market share controls: {self.include_market_share}")
+        if self.include_sga:
+            logger.info("Including SG&A as third input")
 
         # Preprocess
         df = self._preprocess(data)
@@ -267,14 +310,15 @@ class ACFEstimator(ProductionFunctionEstimator):
                 # Estimate
                 acf_res = self._estimate_window(window_df)
                 if acf_res:
-                    records.append(
-                        {
-                            "ind2d": ind_code,
-                            "year": year,
-                            "theta_c": acf_res["theta_c"],
-                            "theta_k": acf_res.get("theta_k"),
-                        }
-                    )
+                    record = {
+                        "ind2d": ind_code,
+                        "year": year,
+                        "theta_c": acf_res["theta_c"],
+                        "theta_k": acf_res.get("theta_k"),
+                    }
+                    if self.include_sga:
+                        record["theta_s"] = acf_res.get("theta_s")
+                    records.append(record)
 
         result = pd.DataFrame(records)
         self.results_ = result
