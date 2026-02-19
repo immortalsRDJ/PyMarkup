@@ -73,12 +73,13 @@ def _apply_agg_style() -> None:
 
 
 def plot_aggregate_markup(
-    agg_markup: pd.DataFrame,
+    markups: pd.DataFrame,
     agg_markup_ppi_matched: pd.DataFrame | None = None,
     agg_markup_dleu: pd.DataFrame | None = None,
     year_range: tuple[int, int] | None = None,
     figsize: tuple[int, int] = (15, 10),
     save_path: Path | str | None = None,
+    title: str | None = None,
 ) -> plt.Figure:
     """
     Plot aggregate markup comparison over time (Figure 1).
@@ -89,9 +90,9 @@ def plot_aggregate_markup(
 
     Parameters
     ----------
-    agg_markup : pd.DataFrame
-        Aggregate markup for all firms with columns: year, MARKUP_spec1
-        (from ``agg_markup_annual.csv``).
+    markups : pd.DataFrame
+        Either firm-level markups with columns: gvkey, year, markup, sale_D (optional)
+        OR pre-aggregated with columns: year, MARKUP_spec1
     agg_markup_ppi_matched : pd.DataFrame, optional
         Aggregate markup for PPI-matched firms with columns:
         year, MARKUP10_AGG_limited
@@ -105,6 +106,8 @@ def plot_aggregate_markup(
         Figure size in inches.
     save_path : Path or str, optional
         If provided, saves figure to this path.
+    title : str, optional
+        Plot title. Defaults to "Aggregate Markup".
 
     Returns
     -------
@@ -112,10 +115,23 @@ def plot_aggregate_markup(
     """
     _apply_agg_style()
 
-    # Merge all series
-    p = agg_markup.rename(
-        columns={"MARKUP_spec1": "agg_markup_all_firms"}
-    ).copy()
+    # Check if input is firm-level or pre-aggregated
+    if "markup" in markups.columns and "gvkey" in markups.columns:
+        # Firm-level: aggregate by year using sales-weighted mean
+        df = markups.copy()
+        df["TOTSALES"] = df.groupby("year")["sale_D"].transform("sum") if "sale_D" in df.columns else 1
+        df["weight"] = df["sale_D"] / df["TOTSALES"] if "sale_D" in df.columns else 1 / df.groupby("year")["markup"].transform("size")
+        agg_markup = df.groupby("year").apply(
+            lambda g: np.sum(g["weight"] * g["markup"].fillna(0)),
+            include_groups=False,
+        ).reset_index(name="agg_markup_all_firms")
+    else:
+        # Pre-aggregated
+        agg_markup = markups.rename(
+            columns={"MARKUP_spec1": "agg_markup_all_firms"}
+        ).copy()
+
+    p = agg_markup.copy()
 
     if agg_markup_ppi_matched is not None:
         p = p.merge(
@@ -157,6 +173,8 @@ def plot_aggregate_markup(
     ax.legend(labels)
 
     ax.set_ylabel("Aggregate Markup")
+    if title:
+        ax.set_title(title)
     fig.tight_layout()
 
     if save_path:
@@ -215,14 +233,37 @@ def prepare_scatter_data(
     )
 
     # Merge PPI (skip if panel already has it)
-    if "ppi" not in df.columns:
-        ppi_merge_key = "ind2d" if "ind2d" in ppi_data.columns else "naics"
-        df = df.merge(ppi_data, on=[ppi_merge_key, "year"], how="left")
+    if "ppi" not in df.columns and "PPI" not in df.columns:
+        # Determine merge key based on available columns
+        ppi = ppi_data.copy()
+        # Standardize column names
+        if "PPI" in ppi.columns:
+            ppi = ppi.rename(columns={"PPI": "ppi"})
+        if "naics_code" in ppi.columns:
+            ppi = ppi.rename(columns={"naics_code": "naics"})
+
+        # Try different merge keys
+        if "ind2d" in ppi.columns and "ind2d" in df.columns:
+            df = df.merge(ppi, on=["ind2d", "year"], how="left")
+        elif "naics" in ppi.columns and "naics" in df.columns:
+            df = df.merge(ppi, on=["naics", "year"], how="left")
+        else:
+            # Try to create ind2d from naics in ppi
+            if "naics" in ppi.columns:
+                ppi["ind2d"] = pd.to_numeric(ppi["naics"].astype(str).str.slice(0, 2), errors="coerce")
+                if "ind2d" in df.columns:
+                    df = df.merge(ppi[["ind2d", "year", "ppi"]], on=["ind2d", "year"], how="left")
+    elif "PPI" in df.columns:
+        df = df.rename(columns={"PPI": "ppi"})
     df = df.dropna(subset=["ppi"])
 
     # Merge CPI (skip if panel already has it)
     if "CPI" not in df.columns:
-        df = df.merge(cpi_data, on="year", how="left")
+        cpi = cpi_data.copy()
+        # Standardize column name
+        if "cpi" in cpi.columns:
+            cpi = cpi.rename(columns={"cpi": "CPI"})
+        df = df.merge(cpi, on="year", how="left")
 
     # CPI-adjusted variables
     df["PPI_CPI"] = df["ppi"] / df["CPI"] * 100

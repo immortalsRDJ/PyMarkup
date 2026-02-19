@@ -7,7 +7,7 @@ A Python toolkit for estimating firm-level markups using production function-bas
 ```bash
 git clone https://github.com/immortalsRDJ/PyMarkup
 cd PyMarkup
-uv sync --python 3.10
+uv sync
 ```
 
 For WRDS data downloads, add the `wrds` extra:
@@ -18,45 +18,21 @@ uv sync --extra wrds
 
 ## Quick Start
 
-### Option 1: Run Everything in One Go
-
-The easiest way to use PyMarkup is with `run_all()`, which handles the entire pipeline:
-
-```python
-from PyMarkup import MarkupPipeline, PipelineConfig
-
-config = PipelineConfig(
-    compustat_path="Input/DLEU/Compustat_annual.csv",
-    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
-    fred_api_key="your-fred-api-key",      # Or set FRED_API_KEY env var
-    data_dir="Input",
-)
-
-pipeline = MarkupPipeline(config)
-results = pipeline.run_all(
-    download=True,           # Download data from WRDS/FRED/BLS
-    skip_compustat=True,     # Skip if you already have Compustat data
-    generate_figures=True,   # Generate output figures
-)
-results.save(output_dir="Output/", format="csv")
-```
-
-### Option 2: Command Line
+### Option 1: Command Line (Recommended)
 
 ```bash
-# Full pipeline with config file
-pymarkup run-all --config config.yaml
+# 1. Set up config file
+cp config.example.yaml config.yaml
+# Edit config.yaml with your API keys and settings
 
-# Skip download step (use existing data)
-pymarkup run-all --config config.yaml --skip-download
+# 2. Run the full pipeline
+uv run pymarkup run-all --config config.yaml
 
-# Skip only Compustat download (no WRDS credentials needed)
-pymarkup run-all --config config.yaml --skip-compustat
+# Or skip data download if you already have the data
+uv run pymarkup run-all --config config.yaml --skip-download
 ```
 
-### Option 3: Step by Step
-
-If you prefer more control, run each step separately:
+### Option 2: Python Script
 
 ```python
 from PyMarkup import MarkupPipeline, PipelineConfig, EstimatorConfig
@@ -68,8 +44,47 @@ config = PipelineConfig(
 )
 
 pipeline = MarkupPipeline(config)
-results = pipeline.run()  # Runs data prep -> estimation -> markup calculation
+results = pipeline.run()
 results.save(output_dir="Output/", format="csv")
+```
+
+## Command Line Reference
+
+### Full Pipeline
+
+```bash
+# Run everything (download + estimate + figures)
+uv run pymarkup run-all --config config.yaml
+
+# Skip all downloads (use existing data)
+uv run pymarkup run-all --config config.yaml --skip-download
+
+# Skip only Compustat download (no WRDS credentials needed)
+uv run pymarkup run-all --config config.yaml --skip-compustat
+
+# Skip figure generation
+uv run pymarkup run-all --config config.yaml --no-figures
+
+# Verbose output for debugging
+uv run pymarkup run-all --config config.yaml -v
+```
+
+### Individual Commands
+
+```bash
+# Download data only
+uv run pymarkup download ppi                        # PPI (no credentials needed)
+uv run pymarkup download cpi --config config.yaml   # CPI (needs FRED API key)
+uv run pymarkup download all --config config.yaml   # All datasets
+
+# Run estimation only (requires existing data)
+uv run pymarkup estimate --config config.yaml
+
+# Validate input data
+uv run pymarkup validate Input/DLEU/Compustat_annual.csv
+
+# Check version
+uv run pymarkup version
 ```
 
 ## Configuration
@@ -246,29 +261,6 @@ decomp_results = op.decompose(firm_markups)
 plot_decomposition(decomp_results, output_path="Output/decomposition.pdf")
 ```
 
-## CLI Reference
-
-```bash
-# Run full pipeline
-pymarkup run-all --config config.yaml [OPTIONS]
-  --skip-download      Skip data download step
-  --skip-compustat     Skip Compustat download only
-  --skip-cpi           Skip CPI download only
-  --skip-ppi           Skip PPI download only
-  --no-figures         Skip figure generation
-  --output PATH        Output directory (default: Output/)
-
-# Run estimation only (requires existing data)
-pymarkup estimate --config config.yaml
-
-# Download data only
-pymarkup download all --config config.yaml
-pymarkup download ppi                        # PPI only, no credentials
-pymarkup download cpi --config config.yaml   # CPI only
-
-# Validate input data
-pymarkup validate Input/DLEU/Compustat_annual.csv
-```
 
 ## Project Structure
 

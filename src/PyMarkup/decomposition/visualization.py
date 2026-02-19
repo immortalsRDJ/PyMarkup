@@ -37,7 +37,7 @@ def _apply_decomp_style() -> None:
 
 def plot_decomposition(
     decomposition: pd.DataFrame,
-    cumulative: bool = True,
+    cumulative: bool = False,
     title: str = "Dynamic Olley-Pakes Decomposition of Markup Changes",
     figsize: tuple[int, int] = (15, 10),
     save_path: Path | str | None = None,
@@ -54,7 +54,7 @@ def plot_decomposition(
         Output from OlleyPakesDecomposition.decompose().
         Must have columns: aggregate_change, within, reallocation, net_entry.
         Index is the time period.
-    cumulative : bool, default True
+    cumulative : bool, default False
         If True, plot cumulative sums (shows level changes from base period).
         If False, plot period-to-period changes.
     title : str

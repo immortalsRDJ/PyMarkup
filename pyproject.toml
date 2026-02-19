@@ -36,6 +36,7 @@ dependencies = [
     "openpyxl>=3.0.0", # For reading Excel files
     "requests>=2.32.5",
     "fredapi>=0.5.2",
+    "wrds>=3.1.6",
 ]
 requires-python = ">= 3.10"
 

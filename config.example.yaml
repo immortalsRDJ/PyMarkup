@@ -1,17 +1,38 @@
-# PyMarkup Configuration
-# Copy this file to config.yaml and fill in your API keys
+# PyMarkup Pipeline Configuration
+# Copy this file to config.yaml and fill in your settings
 
-# FRED API key for CPI data
-# Get one at: https://fred.stlouisfed.org/docs/api/api_key.html
-fred_api_key: ""
+# Required: Data paths
+compustat_path: "Input/DLEU/Compustat_annual.csv"
+macro_vars_path: "Input/DLEU/macro_vars_new.xlsx"
 
-# WRDS username for Compustat data
-# Register at: https://wrds-www.wharton.upenn.edu/
-wrds_username: ""
+# Estimator settings
+estimator:
+  method: "all"                    # wooldridge_iv, cost_share, acf, or all
+  iv_specification: "spec2"        # spec1 (no SG&A) or spec2 (with SG&A)
+  cs_include_sga: false            # Cost share: include SG&A
+  cs_aggregation: "median"         # median, mean, or weighted_mean
+  acf_include_market_share: true   # ACF: include market share controls
+  acf_include_sga: false           # ACF: include SG&A as third input
+  window_years: 5                  # Rolling window size
+  industry_level: 2                # NAICS digit level (2, 3, or 4)
+  min_observations: 15             # Minimum obs per window
 
-# Data directories (relative to project root)
+# Markup calculation
+cost_share_type: "cogs_only"       # cogs_only or with_sga
+aggregation_weight: "revenue"      # revenue or cost (for aggregating firm markups)
+
+# Data processing
+include_interest_cogs: false       # Include interest expense in COGS
+trim_percentiles: [0.01, 0.99]     # Outlier trimming percentiles
+
+# Output
+output_dir: "Output"
+save_intermediate: true
+
+# Download settings
 data_dir: "Input"
-intermediate_dir: "Intermediate"
+generate_figures: true
 
-# PPI download URL (usually no need to change)
-ppi_url: "https://download.bls.gov/pub/time.series/pc/pc.data.0.Current"
+# API credentials (or use environment variables FRED_API_KEY, WRDS_USERNAME)
+fred_api_key: ""                   # Get at: https://fred.stlouisfed.org/docs/api/api_key.html
+wrds_username: ""                  # Register at: https://wrds-www.wharton.upenn.edu/

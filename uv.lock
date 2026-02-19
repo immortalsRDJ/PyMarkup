@@ -2547,6 +2547,7 @@ dependencies = [
     { name = "seaborn" },
     { name = "statsmodels" },
     { name = "typer" },
+    { name = "wrds" },
 ]
 
 [package.optional-dependencies]
@@ -2598,6 +2599,7 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.12.0" },
     { name = "statsmodels", specifier = ">=0.14.0" },
     { name = "typer", specifier = ">=0.9.0" },
+    { name = "wrds", specifier = ">=3.1.6" },
     { name = "wrds", marker = "extra == 'wrds'", specifier = ">=3.1.0" },
 ]
 provides-extras = ["test", "dev", "wrds"]

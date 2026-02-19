@@ -166,7 +166,17 @@ def create_compustat_panel(
         Cleaned panel with deflated variables
     """
     logger.info(f"Loading Compustat from {compustat_path}")
-    df = pd.read_stata(compustat_path)
+    compustat_path = Path(compustat_path)
+    if compustat_path.suffix.lower() == ".csv":
+        df = pd.read_csv(compustat_path, dtype={"naics": str})
+    elif compustat_path.suffix.lower() == ".dta":
+        df = pd.read_stata(compustat_path)
+    else:
+        raise ValueError(f"Unsupported file format: {compustat_path.suffix}. Use .csv or .dta")
+
+    # Ensure naics is string type
+    df["naics"] = df["naics"].astype(str).str.strip()
+
     df = df[df["fyear"] > 1954].copy()
     df = df.rename(columns={"fyear": "year"})
     df = df.sort_values(["gvkey", "year"])
@@ -175,7 +185,7 @@ def create_compustat_panel(
     df["nrobs"] = df.groupby(["gvkey", "year"])["year"].transform("size")
     df = df[~(((df["nrobs"] == 2) | (df["nrobs"] == 3)) & (df["indfmt"] == "FS"))]
     df = df.drop_duplicates(subset=["gvkey", "year"])
-    df = df[df["naics"].notna() & (df["naics"] != "")]
+    df = df[df["naics"].notna() & (df["naics"] != "") & (df["naics"] != "nan")]
 
     # Industry codes
     df = prep_industry_codes(df)

@@ -222,13 +222,52 @@ class MarkupPipeline:
         fig_dir = self.config.output_dir / "figures"
         fig_dir.mkdir(parents=True, exist_ok=True)
 
+        # Load DLEU benchmark if available
+        dleu_path = Path("Intermediate/For Figure 1/Aggregate Markups by DLEU.csv")
+        agg_markup_dleu = None
+        if dleu_path.exists():
+            try:
+                agg_markup_dleu = pd.read_csv(dleu_path)
+                logger.info(f"Loaded DLEU benchmark from {dleu_path}")
+            except Exception as e:
+                logger.warning(f"Could not load DLEU benchmark: {e}")
+
         for name, markups in all_markups.items():
-            # Figure 1: Aggregate markup time series
+            # Figure 1: Aggregate markup time series (with comparison)
             logger.info(f"\nFigure 1 ({name}): Aggregate markup time series")
             try:
+                # Compute aggregate markup for PPI-matched firms
+                agg_markup_ppi_matched = None
+                if ppi_data is not None and self.panel_data is not None:
+                    # Merge to find firms with PPI data
+                    ppi_cols = ppi_data.copy()
+                    if "naics_code" in ppi_cols.columns:
+                        ppi_cols = ppi_cols.rename(columns={"naics_code": "naics"})
+                    if "naics" in ppi_cols.columns and "naics" in self.panel_data.columns:
+                        matched = markups.merge(
+                            self.panel_data[["gvkey", "year", "naics", "sale_D"]],
+                            on=["gvkey", "year"],
+                            how="inner"
+                        )
+                        matched = matched.merge(
+                            ppi_cols[["naics", "year"]].drop_duplicates(),
+                            on=["naics", "year"],
+                            how="inner"
+                        )
+                        if len(matched) > 0:
+                            matched["TOTSALES"] = matched.groupby("year")["sale_D"].transform("sum")
+                            matched["weight"] = matched["sale_D"] / matched["TOTSALES"]
+                            agg_ppi = matched.groupby("year").apply(
+                                lambda g: (g["weight"] * g["markup"].fillna(0)).sum(),
+                                include_groups=False,
+                            ).reset_index(name="MARKUP10_AGG_limited")
+                            agg_markup_ppi_matched = agg_ppi
+
                 fig1 = plot_aggregate_markup(
                     markups,
-                    title=f"Aggregate Markup ({name})",
+                    agg_markup_ppi_matched=agg_markup_ppi_matched,
+                    agg_markup_dleu=agg_markup_dleu,
+                    title=f"Aggregate Markup Comparison ({name})",
                     save_path=fig_dir / f"aggregate_markup_{name}.pdf",
                 )
                 plt.close(fig1)
@@ -428,6 +467,6 @@ class MarkupPipeline:
         # Step 4: Figures (optional)
         if generate_figures:
             ppi_data, cpi_data = self._load_price_indices()
-            self.run_figures(results.markups, ppi_data, cpi_data)
+            self.run_figures(results.firm_markups, ppi_data, cpi_data)
 
         return results
