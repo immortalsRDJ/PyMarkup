@@ -78,6 +78,10 @@ class PipelineConfig:
         Path to macro_vars_new.xlsx file
     estimator : EstimatorConfig
         Estimator configuration
+    cost_share_type : str
+        Cost share formula: "cogs_only" or "with_sga"
+    aggregation_weight : str
+        Weight for aggregating firm markups: "revenue" (default) or "cost"
     include_interest_cogs : bool
         Whether to include interest expense in COGS
     trim_percentiles : tuple[float, float]
@@ -106,6 +110,7 @@ class PipelineConfig:
 
     # Markup calculation
     cost_share_type: Literal["cogs_only", "with_sga"] = "cogs_only"
+    aggregation_weight: Literal["revenue", "cost"] = "revenue"
 
     # Data processing
     include_interest_cogs: bool = False
@@ -207,6 +212,7 @@ class PipelineConfig:
                 "min_observations": self.estimator.min_observations,
             },
             "cost_share_type": self.cost_share_type,
+            "aggregation_weight": self.aggregation_weight,
             "include_interest_cogs": self.include_interest_cogs,
             "trim_percentiles": list(self.trim_percentiles),
             "output_dir": str(self.output_dir),
@@ -255,6 +261,7 @@ class PipelineConfig:
                 industry_level=2,
             ),
             cost_share_type="cogs_only",
+            aggregation_weight="revenue",  # Legacy uses revenue share
             include_interest_cogs=False,
             trim_percentiles=(0.01, 0.99),
             output_dir=data_root / "Output",

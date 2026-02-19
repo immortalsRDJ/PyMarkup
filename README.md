@@ -185,6 +185,39 @@ config = PipelineConfig(
 )
 ```
 
+#### Aggregation Weights
+
+When aggregating firm-level markups to industry or economy level, you can choose the weighting scheme:
+
+| Weight Type | Formula | Use Case |
+|-------------|---------|----------|
+| `"revenue"` (default) | `firm_revenue / total_revenue` | Standard approach, larger firms weighted more |
+| `"cost"` | `firm_cogs / total_cogs` | Weight by production scale |
+
+```python
+from PyMarkup.core.markup_calculation import aggregate_markups
+
+# Revenue-weighted aggregation (default)
+agg = aggregate_markups(
+    firm_markups, by="year", method="weighted_mean",
+    weight_type="revenue", panel_data=panel_data
+)
+
+# Cost-weighted aggregation
+agg = aggregate_markups(
+    firm_markups, by="year", method="weighted_mean",
+    weight_type="cost", panel_data=panel_data
+)
+```
+
+Via pipeline config:
+```python
+config = PipelineConfig(
+    ...
+    aggregation_weight="revenue",  # or "cost"
+)
+```
+
 ### 4. Markup Calculation
 
 Computes firm-level markups:

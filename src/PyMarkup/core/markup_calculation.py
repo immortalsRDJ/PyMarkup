@@ -70,6 +70,8 @@ def aggregate_markups(
     by: str | list[str] = "year",
     method: str = "median",
     weights: pd.Series | None = None,
+    weight_type: str | None = None,
+    panel_data: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Aggregate firm-level markups to industry or time level.
@@ -83,7 +85,14 @@ def aggregate_markups(
     method : str
         Aggregation method: 'median', 'mean', or 'weighted_mean'
     weights : pd.Series, optional
-        Weights for weighted_mean (e.g., sales or employment)
+        Custom weights for weighted_mean. If provided, overrides weight_type.
+    weight_type : str, optional
+        Built-in weight type for weighted_mean:
+        - "revenue": firm revenue share (sale_D / total_sale_D)
+        - "cost": firm cost share (cogs_D / total_cogs_D)
+        Requires panel_data if used.
+    panel_data : pd.DataFrame, optional
+        Panel data with sale_D and cogs_D columns. Required if weight_type is used.
 
     Returns
     -------
@@ -98,11 +107,34 @@ def aggregate_markups(
     elif method == "mean":
         agg = firm_markups.groupby(by)["markup"].mean().reset_index()
     elif method == "weighted_mean":
-        if weights is None:
-            raise ValueError("weights must be provided for weighted_mean")
         df = firm_markups.copy()
-        df["_w"] = weights
-        agg = df.groupby(by).apply(lambda g: np.average(g["markup"], weights=g["_w"])).reset_index(name="markup")
+
+        # Compute weights based on weight_type if no custom weights provided
+        if weights is not None:
+            df["_w"] = weights
+        elif weight_type is not None:
+            if panel_data is None:
+                raise ValueError("panel_data must be provided when using weight_type")
+
+            # Merge panel data to get sale_D and cogs_D
+            merge_cols = ["gvkey", "year"]
+            if weight_type == "revenue":
+                df = df.merge(panel_data[merge_cols + ["sale_D"]], on=merge_cols, how="left")
+                df["_total"] = df.groupby(by)["sale_D"].transform("sum")
+                df["_w"] = df["sale_D"] / df["_total"]
+            elif weight_type == "cost":
+                df = df.merge(panel_data[merge_cols + ["cogs_D"]], on=merge_cols, how="left")
+                df["_total"] = df.groupby(by)["cogs_D"].transform("sum")
+                df["_w"] = df["cogs_D"] / df["_total"]
+            else:
+                raise ValueError(f"Unknown weight_type: {weight_type}. Use 'revenue' or 'cost'.")
+        else:
+            raise ValueError("Either weights or weight_type must be provided for weighted_mean")
+
+        agg = df.groupby(by).apply(
+            lambda g: np.average(g["markup"].fillna(0), weights=g["_w"]),
+            include_groups=False,
+        ).reset_index(name="markup")
     else:
         raise ValueError(f"Unknown aggregation method: {method}")
 
