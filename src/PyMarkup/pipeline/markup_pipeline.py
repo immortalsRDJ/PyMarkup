@@ -9,8 +9,16 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from PyMarkup.core.data_preparation import create_compustat_panel
-from PyMarkup.core.figures import plot_aggregate_markup, plot_markup_vs_ppi, prepare_scatter_data
+from PyMarkup.core.figures import (
+    compute_aggregate_markup,
+    plot_aggregate_markup,
+    plot_aggregate_markup_comparison,
+    plot_aggregate_markup_single_method,
+    plot_markup_vs_ppi,
+    prepare_scatter_data,
+)
 from PyMarkup.core.markup_calculation import compute_markups
+from PyMarkup.decomposition import OlleyPakesDecomposition, plot_decomposition
 from PyMarkup.estimators import ACFEstimator, CostShareEstimator, WooldridgeIVEstimator
 from PyMarkup.io.schemas import MarkupResults
 from PyMarkup.pipeline.config import PipelineConfig
@@ -202,8 +210,8 @@ class MarkupPipeline:
         """
         Generate figures from markup results.
 
-        Step 4: Produces Figure 1 (aggregate markup time series) and optionally
-        Figure 2 (CAGR of PPI vs markup scatter, if PPI/CPI data provided).
+        Step 4: Produces Figure 1 (aggregate markup time series comparing all methods)
+        and optionally Figure 2 (CAGR of PPI vs markup scatter, if PPI/CPI data provided).
 
         Parameters
         ----------
@@ -220,31 +228,12 @@ class MarkupPipeline:
 
         fig_dir = self.config.output_dir / "figures"
         fig_dir.mkdir(parents=True, exist_ok=True)
+        intermediate_dir = self.config.output_dir / "intermediate"
+        intermediate_dir.mkdir(parents=True, exist_ok=True)
 
-        # Try to load pre-computed aggregates from legacy pipeline (preferred)
-        fig1_dir = Path("Intermediate/For Figure 1")
-        agg_markup_path = fig1_dir / "agg_markup_annual.csv"
-        agg_markup_ppi_path = fig1_dir / "agg_markup_limited_to_PPI matched_annual.csv"
-        dleu_path = fig1_dir / "Aggregate Markups by DLEU.csv"
-
-        # Load pre-computed data if available
-        agg_markup_precomputed = None
-        agg_markup_ppi_matched = None
+        # Load DLEU benchmark (external reference data)
+        dleu_path = Path("Intermediate/For Figure 1") / "Aggregate Markups by DLEU.csv"
         agg_markup_dleu = None
-
-        if agg_markup_path.exists():
-            try:
-                agg_markup_precomputed = pd.read_csv(agg_markup_path)
-                logger.info(f"Loaded pre-computed aggregate markup from {agg_markup_path}")
-            except Exception as e:
-                logger.warning(f"Could not load pre-computed aggregate: {e}")
-
-        if agg_markup_ppi_path.exists():
-            try:
-                agg_markup_ppi_matched = pd.read_csv(agg_markup_ppi_path)
-                logger.info(f"Loaded PPI-matched aggregate from {agg_markup_ppi_path}")
-            except Exception as e:
-                logger.warning(f"Could not load PPI-matched aggregate: {e}")
 
         if dleu_path.exists():
             try:
@@ -253,37 +242,71 @@ class MarkupPipeline:
             except Exception as e:
                 logger.warning(f"Could not load DLEU benchmark: {e}")
 
+        # Compute and save aggregate markups for each method
+        logger.info("\nComputing aggregate markups for each method...")
         for name, markups in all_markups.items():
-            # Figure 1: Aggregate markup time series (with comparison)
-            logger.info(f"\nFigure 1 ({name}): Aggregate markup time series")
             try:
-                # Use pre-computed aggregates if available, otherwise use firm-level data
-                if agg_markup_precomputed is not None:
-                    plot_data = agg_markup_precomputed
-                    year_min = int(plot_data["year"].min())
-                    year_max = int(plot_data["year"].max())
-                else:
-                    plot_data = markups
-                    year_min = int(markups["year"].min())
-                    year_max = int(markups["year"].max())
+                # All firms
+                agg_all = compute_aggregate_markup(
+                    markups, self.panel_data,
+                    weight_type=self.config.aggregation_weight,
+                    ppi_matched_only=False,
+                )
+                agg_all.to_csv(intermediate_dir / f"agg_markup_annual_{name}.csv", index=False)
+                logger.info(f"  Saved agg_markup_annual_{name}.csv")
 
-                filename = f"Aggregate Markup Comparison ({year_min}-{year_max}, Annual).pdf"
+                # PPI-matched firms only
+                if ppi_data is not None:
+                    agg_ppi = compute_aggregate_markup(
+                        markups, self.panel_data,
+                        weight_type=self.config.aggregation_weight,
+                        ppi_matched_only=True,
+                        ppi_data=ppi_data,
+                    )
+                    agg_ppi.to_csv(intermediate_dir / f"agg_markup_ppi_matched_{name}.csv", index=False)
+                    logger.info(f"  Saved agg_markup_ppi_matched_{name}.csv")
+            except Exception as exc:
+                logger.error(f"  Aggregate computation for {name} failed: {exc}")
 
-                fig1 = plot_aggregate_markup(
-                    plot_data,
-                    agg_markup_ppi_matched=agg_markup_ppi_matched,
+        # Figure 1: Separate plot for each method (IV and Cost Share only)
+        # Each plot has 3 lines: DLEU, Replication, Firms Matched to PPI
+        methods_to_plot = ["wooldridge_iv", "cost_share"]
+        method_labels = {
+            "wooldridge_iv": "Wooldridge IV",
+            "cost_share": "Cost Share",
+        }
+
+        for method_name in methods_to_plot:
+            if method_name not in all_markups:
+                continue
+
+            markups = all_markups[method_name]
+            label = method_labels.get(method_name, method_name)
+            logger.info(f"\nFigure 1 ({label}): Aggregate markup time series")
+
+            try:
+                year_min = int(markups["year"].min())
+                year_max = int(markups["year"].max())
+                filename = f"Aggregate Markup Comparison - {label} ({year_min}-{year_max}, Annual).pdf"
+
+                fig = plot_aggregate_markup_single_method(
+                    firm_markups=markups,
+                    panel_data=self.panel_data,
+                    method_name=label,
                     agg_markup_dleu=agg_markup_dleu,
+                    ppi_data=ppi_data,
+                    weight_type=self.config.aggregation_weight,
                     year_range=(year_min, year_max),
-                    title=f"Aggregate Markup Comparison ({year_min}-{year_max}, Annual)",
                     save_path=fig_dir / filename,
                 )
-                plt.close(fig1)
+                plt.close(fig)
                 logger.info(f"  Saved {filename}")
             except Exception as exc:
-                logger.error(f"  Figure 1 ({name}) failed: {exc}")
+                logger.error(f"  Figure 1 ({label}) failed: {exc}")
 
-            # Figure 2: PPI vs markup scatter (needs PPI + CPI)
-            if ppi_data is not None and cpi_data is not None and self.panel_data is not None:
+        # Figure 2: PPI vs markup scatter (for each method)
+        if ppi_data is not None and cpi_data is not None and self.panel_data is not None:
+            for name, markups in all_markups.items():
                 logger.info(f"\nFigure 2 ({name}): PPI vs markup scatter")
                 try:
                     scatter = prepare_scatter_data(
@@ -375,6 +398,109 @@ class MarkupPipeline:
 
         return ppi_data, cpi_data
 
+    def run_decomposition(
+        self,
+        all_markups: dict[str, pd.DataFrame],
+    ) -> dict[str, pd.DataFrame]:
+        """
+        Run Olley-Pakes decomposition on firm-level markups.
+
+        Decomposes aggregate markup changes into:
+        - Within: Changes within continuing firms
+        - Reallocation: Market share shifts
+        - Net Entry: Entry/exit effects
+
+        Parameters
+        ----------
+        all_markups : dict
+            Dictionary mapping method name to firm-level markup DataFrame.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping method name to decomposition results DataFrame.
+        """
+        logger.info("=" * 80)
+        logger.info("STEP 5: Olley-Pakes Decomposition")
+        logger.info("=" * 80)
+
+        fig_dir = self.config.output_dir / "figures"
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        intermediate_dir = self.config.output_dir / "intermediate"
+        intermediate_dir.mkdir(parents=True, exist_ok=True)
+
+        # Only run decomposition for IV and Cost Share (not ACF)
+        methods_to_decompose = ["wooldridge_iv", "cost_share"]
+        method_labels = {
+            "wooldridge_iv": "Wooldridge IV",
+            "cost_share": "Cost Share",
+        }
+
+        all_decompositions = {}
+
+        for method_name in methods_to_decompose:
+            if method_name not in all_markups:
+                continue
+
+            markups = all_markups[method_name]
+            label = method_labels.get(method_name, method_name)
+            logger.info(f"\nDecomposition ({label})...")
+
+            try:
+                # Prepare data for decomposition
+                # Need: gvkey, year, markup, sale (for weights)
+                decomp_data = markups.merge(
+                    self.panel_data[["gvkey", "year", "sale_D"]],
+                    on=["gvkey", "year"],
+                    how="left",
+                )
+
+                # Remove rows with missing values
+                decomp_data = decomp_data.dropna(subset=["markup", "sale_D"])
+                decomp_data = decomp_data[decomp_data["markup"] > 0]
+                decomp_data = decomp_data[decomp_data["markup"] < 50]  # Remove extreme outliers
+
+                # Compute base period aggregate markup (revenue-weighted)
+                base_year = decomp_data["year"].min()
+                base_data = decomp_data[decomp_data["year"] == base_year]
+                base_total_sales = base_data["sale_D"].sum()
+                base_markup = (base_data["markup"] * base_data["sale_D"]).sum() / base_total_sales
+                logger.info(f"  Base year {base_year} aggregate markup: {base_markup:.4f}")
+
+                # Run decomposition
+                op = OlleyPakesDecomposition(
+                    firm_var="gvkey",
+                    time_var="year",
+                    markup_var="markup",
+                    weight_var="sale_D",
+                )
+                decomp_results = op.decompose(decomp_data)
+                all_decompositions[method_name] = decomp_results
+
+                # Save results
+                decomp_results.to_csv(intermediate_dir / f"decomposition_{method_name}.csv")
+                logger.info(f"  Saved decomposition_{method_name}.csv")
+
+                # Generate plot (cumulative values with base markup level)
+                year_min = int(decomp_results.index.min())
+                year_max = int(decomp_results.index.max())
+                filename = f"Decomposition - {label} ({year_min}-{year_max}).pdf"
+
+                fig = plot_decomposition(
+                    decomp_results,
+                    cumulative=True,
+                    base_markup=base_markup,
+                    title=f"Decomposition of Markup Growth - {label}",
+                    save_path=fig_dir / filename,
+                )
+                plt.close(fig)
+                logger.info(f"  Saved {filename}")
+
+            except Exception as exc:
+                logger.error(f"  Decomposition ({label}) failed: {exc}")
+
+        return all_decompositions
+
     def run(self) -> MarkupResults:
         """
         Execute the full pipeline.
@@ -427,6 +553,7 @@ class MarkupPipeline:
         3. Elasticity estimation
         4. Markup calculation
         5. Figure generation (optional)
+        6. Olley-Pakes decomposition (optional)
 
         Parameters
         ----------
@@ -475,5 +602,9 @@ class MarkupPipeline:
         if generate_figures:
             ppi_data, cpi_data = self._load_price_indices()
             self.run_figures(results.firm_markups, ppi_data, cpi_data)
+
+        # Step 5: Decomposition
+        if generate_figures:
+            self.run_decomposition(results.firm_markups)
 
         return results

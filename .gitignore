@@ -229,3 +229,15 @@ config.yaml
 
 # Auxiliary replication code (not for distribution)
 src/BMYReplication/
+
+# Legacy numbered scripts (replaced by package modules)
+src/PyMarkup/0.0*
+src/PyMarkup/0.1*
+src/PyMarkup/0.2*
+src/PyMarkup/0.3*
+src/PyMarkup/0.4*
+src/PyMarkup/0.5*
+src/PyMarkup/1.*
+src/PyMarkup/2.*
+src/PyMarkup/3.*
+src/PyMarkup/4.*

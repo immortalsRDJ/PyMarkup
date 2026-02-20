@@ -38,6 +38,7 @@ def _apply_decomp_style() -> None:
 def plot_decomposition(
     decomposition: pd.DataFrame,
     cumulative: bool = False,
+    base_markup: float | None = None,
     title: str = "Dynamic Olley-Pakes Decomposition of Markup Changes",
     figsize: tuple[int, int] = (15, 10),
     save_path: Path | str | None = None,
@@ -48,6 +49,14 @@ def plot_decomposition(
     Shows aggregate markup change and its three components:
     within, reallocation, and net entry.
 
+    When base_markup is provided, the plot shows markup LEVELS where:
+    - Markup (benchmark) = base_markup + cumsum(aggregate_change)
+    - Within = base_markup/3 + cumsum(within)
+    - Reallocation = base_markup/3 + cumsum(reallocation)
+    - Net Entry = base_markup/3 + cumsum(net_entry)
+
+    This ensures: Within + Reallocation + Net Entry = Markup (benchmark)
+
     Parameters
     ----------
     decomposition : pd.DataFrame
@@ -57,6 +66,9 @@ def plot_decomposition(
     cumulative : bool, default False
         If True, plot cumulative sums (shows level changes from base period).
         If False, plot period-to-period changes.
+    base_markup : float, optional
+        Base period aggregate markup level. If provided with cumulative=True,
+        plots actual markup levels (matching DLEU Figure IV style).
     title : str
         Plot title.
     figsize : tuple
@@ -78,22 +90,37 @@ def plot_decomposition(
     plot_data = decomposition[components].copy()
     if cumulative:
         plot_data = plot_data.cumsum()
+        # If base_markup provided, add it to show actual levels
+        # Distribute base_markup so that components sum to total
+        if base_markup is not None:
+            # Markup (benchmark) gets full base
+            plot_data["aggregate_change"] = plot_data["aggregate_change"] + base_markup
+            # Each component gets 1/3 of base so they sum to total
+            plot_data["within"] = plot_data["within"] + base_markup / 3
+            plot_data["reallocation"] = plot_data["reallocation"] + base_markup / 3
+            plot_data["net_entry"] = plot_data["net_entry"] + base_markup / 3
 
     fig, ax = plt.subplots(figsize=figsize)
 
+    # Style matching DLEU Figure IV
     ax.plot(plot_data.index, plot_data["aggregate_change"],
-            color="black", linestyle="-", linewidth=3, label="Markup (Total)")
+            color="red", linestyle="-", linewidth=3, label="Markup (benchmark)")
     ax.plot(plot_data.index, plot_data["within"],
-            color="darkgreen", linestyle="-", linewidth=3, label="Within")
+            color="blue", linestyle="--", linewidth=3, label="Within")
     ax.plot(plot_data.index, plot_data["reallocation"],
-            color="orange", linestyle="--", linewidth=3, label="Reallocation")
+            color="black", linestyle=":", linewidth=3, label="Reallocation")
     ax.plot(plot_data.index, plot_data["net_entry"],
-            color="steelblue", linestyle=":", linewidth=3, label="Net Entry")
+            color="green", linestyle="-.", linewidth=3, label="Net Entry")
 
-    ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
-    ax.set_ylabel("Cumulative Change" if cumulative else "Period Change")
+    if not (cumulative and base_markup is not None):
+        ax.axhline(0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
+
+    if cumulative and base_markup is not None:
+        ax.set_ylabel("Aggregate Markup")
+    else:
+        ax.set_ylabel("Cumulative Change" if cumulative else "Period Change")
     ax.set_title(title)
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
 
     if save_path:
