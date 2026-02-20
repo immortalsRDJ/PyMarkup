@@ -117,7 +117,7 @@ Alternatively, set environment variables: `FRED_API_KEY`, `WRDS_USERNAME`
 ## Pipeline Overview
 
 ```
-Download -> Data Preparation -> Elasticity Estimation -> Markup Calculation -> Figures
+Download -> Data Preparation -> Elasticity Estimation -> Markup Calculation -> Figures & Decomposition
 ```
 
 ### 1. Data Download
@@ -248,16 +248,49 @@ where cost_share = COGS / Revenue
 | Aggregate Markup | `plot_aggregate_markup()` | Time series of aggregate markups |
 | PPI vs Markup | `plot_markup_vs_ppi()` | Scatter plot with weighted OLS regression |
 
-### 6. Decomposition (Optional)
+### 6. Decomposition
 
-Dynamic Olley-Pakes decomposition of aggregate markup changes:
+Dynamic Olley-Pakes decomposition of aggregate markup changes (DLEU 2020). The decomposition runs automatically in the pipeline for Wooldridge IV and Cost Share methods.
+
+**Decomposes markup growth into three components:**
+
+| Component | Description |
+|-----------|-------------|
+| **Within** | Markup changes within continuing firms |
+| **Reallocation** | Market share shifts toward high/low-markup firms |
+| **Net Entry** | Difference between entering and exiting firms |
+
+The components sum to the total markup change: `Within + Reallocation + Net Entry = Markup (benchmark)`
+
+**Output files:**
+
+| File | Description |
+|------|-------------|
+| `Output/intermediate/decomposition_wooldridge_iv.csv` | IV decomposition results |
+| `Output/intermediate/decomposition_cost_share.csv` | Cost Share decomposition results |
+| `Output/figures/Decomposition - Wooldridge IV (YYYY-YYYY).pdf` | IV decomposition figure |
+| `Output/figures/Decomposition - Cost Share (YYYY-YYYY).pdf` | Cost Share decomposition figure |
+
+**Standalone usage:**
 
 ```python
 from PyMarkup.decomposition import OlleyPakesDecomposition, plot_decomposition
 
-op = OlleyPakesDecomposition()
+op = OlleyPakesDecomposition(
+    firm_var="gvkey",
+    time_var="year",
+    markup_var="markup",
+    weight_var="sale_D",
+)
 decomp_results = op.decompose(firm_markups)
-plot_decomposition(decomp_results, output_path="Output/decomposition.pdf")
+
+# Plot with cumulative markup levels (DLEU Figure IV style)
+plot_decomposition(
+    decomp_results,
+    cumulative=True,
+    base_markup=1.2,  # Base period aggregate markup
+    save_path="Output/decomposition.pdf",
+)
 ```
 
 
