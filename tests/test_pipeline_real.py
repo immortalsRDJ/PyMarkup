@@ -149,8 +149,8 @@ def test_markup_calculation(
 
     print(f"\n  Markup calculation ({method}):")
 
-    # --- compute_markups: cogs_only ---
-    firm_markups = compute_markups(elasticities, panel, cost_share_type="cogs_only")
+    # compute_markups uses De Loecker & Warzynski formula: cost_share = COGS / Revenue
+    firm_markups = compute_markups(elasticities, panel)
 
     assert {"gvkey", "year", "ind2d", "markup", "theta_c", "cost_share"} == set(
         firm_markups.columns
@@ -173,17 +173,6 @@ def test_markup_calculation(
     assert (cs > 0).all() and (cs <= 1).all(), (
         f"Cost shares outside (0,1]: min={cs.min():.4f}, max={cs.max():.4f}"
     )
-
-    # --- compute_markups: with_sga ---
-    if "xsga_D" in panel.columns:
-        fm_sga = compute_markups(elasticities, panel, cost_share_type="with_sga")
-        valid_sga = fm_sga.dropna(subset=["markup"])
-        valid_sga = valid_sga[(valid_sga["markup"] > 0) & (valid_sga["markup"] < 50)]
-        if len(valid_sga) > 0:
-            print(
-                f"    With SGA - observations: {len(valid_sga):,}, "
-                f"median markup: {valid_sga['markup'].median():.4f}"
-            )
 
     # --- aggregate_markups ---
     agg_year = aggregate_markups(valid, by="year", method="median")

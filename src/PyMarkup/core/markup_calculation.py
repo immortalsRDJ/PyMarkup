@@ -17,42 +17,29 @@ logger = logging.getLogger(__name__)
 def compute_markups(
     elasticities: pd.DataFrame,
     panel_data: pd.DataFrame,
-    cost_share_type: str = "cogs_only",
 ) -> pd.DataFrame:
     """
     Compute firm-level markups from output elasticities.
 
-    The markup is computed as:
+    The markup is computed using the De Loecker & Warzynski formula:
         markup = theta_c / cost_share
-
-    where cost_share = COGS / (COGS + K_expense) or
-          cost_share = COGS / (COGS + SG&A + K_expense)
+        where cost_share = COGS / Revenue
 
     Parameters
     ----------
     elasticities : pd.DataFrame
         Elasticity estimates with columns: ind2d, year, theta_c
     panel_data : pd.DataFrame
-        Firm-level panel with columns: gvkey, year, ind2d, cogs_D, xsga_D, kexp
-    cost_share_type : str
-        Type of cost share calculation:
-        - "cogs_only": COGS / (COGS + K_expense)
-        - "with_sga": COGS / (COGS + SG&A + K_expense)
+        Firm-level panel with columns: gvkey, year, ind2d, cogs_D, sale_D
 
     Returns
     -------
     pd.DataFrame
         DataFrame with columns: gvkey, year, ind2d, markup, theta_c, cost_share
     """
-    # Compute cost shares
+    # Compute cost shares using De Loecker & Warzynski formula
     df = panel_data.copy()
-
-    if cost_share_type == "cogs_only":
-        df["cost_share"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
-    elif cost_share_type == "with_sga":
-        df["cost_share"] = df["cogs_D"] / (df["cogs_D"] + df["xsga_D"] + df["kexp"])
-    else:
-        raise ValueError(f"Unknown cost_share_type: {cost_share_type}")
+    df["cost_share"] = df["cogs_D"] / df["sale_D"]
 
     # Merge elasticities
     df = df.merge(elasticities[["ind2d", "year", "theta_c"]], on=["ind2d", "year"], how="left")

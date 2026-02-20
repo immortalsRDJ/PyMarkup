@@ -196,7 +196,6 @@ config = PipelineConfig(
         cs_include_sga=True,         # Cost Share with SG&A
         acf_include_sga=True,        # ACF with SG&A
     ),
-    cost_share_type="with_sga",      # Markup calculation includes SG&A
 )
 ```
 
@@ -235,11 +234,11 @@ config = PipelineConfig(
 
 ### 4. Markup Calculation
 
-Computes firm-level markups:
+Computes firm-level markups using the De Loecker & Warzynski formula:
 
 ```
 markup = θ / cost_share
-where cost_share = COGS / (COGS + capital_expense)
+where cost_share = COGS / Revenue
 ```
 
 ### 5. Figures

@@ -179,7 +179,6 @@ class MarkupPipeline:
                 markups = compute_markups(
                     elasticities=elast,
                     panel_data=self.panel_data,
-                    cost_share_type=self.config.cost_share_type,
                 )
                 all_markups[name] = markups
                 logger.info(f"✓ {name}: computed markups for {len(markups)} firm-years")
@@ -222,9 +221,31 @@ class MarkupPipeline:
         fig_dir = self.config.output_dir / "figures"
         fig_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load DLEU benchmark if available
-        dleu_path = Path("Intermediate/For Figure 1/Aggregate Markups by DLEU.csv")
+        # Try to load pre-computed aggregates from legacy pipeline (preferred)
+        fig1_dir = Path("Intermediate/For Figure 1")
+        agg_markup_path = fig1_dir / "agg_markup_annual.csv"
+        agg_markup_ppi_path = fig1_dir / "agg_markup_limited_to_PPI matched_annual.csv"
+        dleu_path = fig1_dir / "Aggregate Markups by DLEU.csv"
+
+        # Load pre-computed data if available
+        agg_markup_precomputed = None
+        agg_markup_ppi_matched = None
         agg_markup_dleu = None
+
+        if agg_markup_path.exists():
+            try:
+                agg_markup_precomputed = pd.read_csv(agg_markup_path)
+                logger.info(f"Loaded pre-computed aggregate markup from {agg_markup_path}")
+            except Exception as e:
+                logger.warning(f"Could not load pre-computed aggregate: {e}")
+
+        if agg_markup_ppi_path.exists():
+            try:
+                agg_markup_ppi_matched = pd.read_csv(agg_markup_ppi_path)
+                logger.info(f"Loaded PPI-matched aggregate from {agg_markup_ppi_path}")
+            except Exception as e:
+                logger.warning(f"Could not load PPI-matched aggregate: {e}")
+
         if dleu_path.exists():
             try:
                 agg_markup_dleu = pd.read_csv(dleu_path)
@@ -236,42 +257,28 @@ class MarkupPipeline:
             # Figure 1: Aggregate markup time series (with comparison)
             logger.info(f"\nFigure 1 ({name}): Aggregate markup time series")
             try:
-                # Compute aggregate markup for PPI-matched firms
-                agg_markup_ppi_matched = None
-                if ppi_data is not None and self.panel_data is not None:
-                    # Merge to find firms with PPI data
-                    ppi_cols = ppi_data.copy()
-                    if "naics_code" in ppi_cols.columns:
-                        ppi_cols = ppi_cols.rename(columns={"naics_code": "naics"})
-                    if "naics" in ppi_cols.columns and "naics" in self.panel_data.columns:
-                        matched = markups.merge(
-                            self.panel_data[["gvkey", "year", "naics", "sale_D"]],
-                            on=["gvkey", "year"],
-                            how="inner"
-                        )
-                        matched = matched.merge(
-                            ppi_cols[["naics", "year"]].drop_duplicates(),
-                            on=["naics", "year"],
-                            how="inner"
-                        )
-                        if len(matched) > 0:
-                            matched["TOTSALES"] = matched.groupby("year")["sale_D"].transform("sum")
-                            matched["weight"] = matched["sale_D"] / matched["TOTSALES"]
-                            agg_ppi = matched.groupby("year").apply(
-                                lambda g: (g["weight"] * g["markup"].fillna(0)).sum(),
-                                include_groups=False,
-                            ).reset_index(name="MARKUP10_AGG_limited")
-                            agg_markup_ppi_matched = agg_ppi
+                # Use pre-computed aggregates if available, otherwise use firm-level data
+                if agg_markup_precomputed is not None:
+                    plot_data = agg_markup_precomputed
+                    year_min = int(plot_data["year"].min())
+                    year_max = int(plot_data["year"].max())
+                else:
+                    plot_data = markups
+                    year_min = int(markups["year"].min())
+                    year_max = int(markups["year"].max())
+
+                filename = f"Aggregate Markup Comparison ({year_min}-{year_max}, Annual).pdf"
 
                 fig1 = plot_aggregate_markup(
-                    markups,
+                    plot_data,
                     agg_markup_ppi_matched=agg_markup_ppi_matched,
                     agg_markup_dleu=agg_markup_dleu,
-                    title=f"Aggregate Markup Comparison ({name})",
-                    save_path=fig_dir / f"aggregate_markup_{name}.pdf",
+                    year_range=(year_min, year_max),
+                    title=f"Aggregate Markup Comparison ({year_min}-{year_max}, Annual)",
+                    save_path=fig_dir / filename,
                 )
                 plt.close(fig1)
-                logger.info(f"  Saved aggregate_markup_{name}.pdf")
+                logger.info(f"  Saved {filename}")
             except Exception as exc:
                 logger.error(f"  Figure 1 ({name}) failed: {exc}")
 
