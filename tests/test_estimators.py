@@ -251,7 +251,8 @@ class TestWooldridgeIVEstimator:
         assert est.specification == "spec2"
         assert est.window_years == 5
         assert est.industry_level == 2
-        assert est.min_observations == 15
+        assert est.min_observations == 5
+        assert est.drop_missing_sga is False
 
     def test_initialization_custom(self) -> None:
         """Test custom initialization."""

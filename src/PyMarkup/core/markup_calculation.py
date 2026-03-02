@@ -14,9 +14,56 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def _apply_costshare_trim(df: pd.DataFrame, time_col: str = "year") -> pd.DataFrame:
+    """
+    Trim observations based on cost share percentiles.
+
+    This matches the legacy 0.4 Create Main Datasets.py trimming logic,
+    which trims on both costshare1 and costshare2 (p1-p99 by time period).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Panel data with cogs_D, kexp, xsga_D columns
+    time_col : str
+        Time column for grouping (default: "year")
+
+    Returns
+    -------
+    pd.DataFrame
+        Trimmed DataFrame
+    """
+    df = df.copy()
+
+    # Create cost share variables (matching legacy logic)
+    df["costshare1"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
+    df["costshare2"] = df["cogs_D"] / (df["cogs_D"] + df["xsga_D"] + df["kexp"])
+
+    # Trim on both cost shares sequentially (p1-p99 by time period)
+    for col in ("costshare1", "costshare2"):
+        p1 = df.groupby(time_col)[col].transform(lambda x: x.quantile(0.01))
+        p99 = df.groupby(time_col)[col].transform(lambda x: x.quantile(0.99))
+        mask = (
+            (df[col] > 0)
+            & df[col].notna()
+            & (df[col] > p1)
+            & (df[col] < p99)
+        )
+        df = df[mask]
+
+    # Drop temporary columns
+    df = df.drop(columns=["costshare1", "costshare2"], errors="ignore")
+
+    return df
+
+
 def compute_markups(
     elasticities: pd.DataFrame,
     panel_data: pd.DataFrame,
+    apply_costshare_trim: bool = True,
+    min_year: int = 1955,
+    exclude_ind2d: int | list[int] | None = 99,
+    time_col: str = "year",
 ) -> pd.DataFrame:
     """
     Compute firm-level markups from output elasticities.
@@ -30,21 +77,49 @@ def compute_markups(
     elasticities : pd.DataFrame
         Elasticity estimates with columns: ind2d, year, theta_c
     panel_data : pd.DataFrame
-        Firm-level panel with columns: gvkey, year, ind2d, cogs_D, sale_D
+        Firm-level panel with columns: gvkey, year, ind2d, cogs_D, sale_D, kexp, xsga_D
+    apply_costshare_trim : bool
+        If True, apply cost share trimming (p1-p99) before computing markups.
+        This matches the legacy 0.4 Create Main Datasets.py behavior. Default: True
+    min_year : int
+        Minimum year to include (default: 1955, matching legacy behavior)
+    exclude_ind2d : int or list[int] or None
+        Industry codes to exclude (default: 99, matching legacy behavior).
+        Set to None to include all industries.
+    time_col : str
+        Time column for grouping in cost share trimming (default: "year")
 
     Returns
     -------
     pd.DataFrame
         DataFrame with columns: gvkey, year, ind2d, markup, theta_c, cost_share
     """
-    # Compute cost shares using De Loecker & Warzynski formula
     df = panel_data.copy()
+
+    # Apply cost share trimming (matching legacy 0.4 behavior)
+    if apply_costshare_trim:
+        n_before = len(df)
+        df = _apply_costshare_trim(df, time_col=time_col)
+        n_after = len(df)
+        logger.info(f"Cost share trimming: {n_before} -> {n_after} observations ({n_before - n_after} removed)")
+
+    # Apply year filter (matching legacy 0.4 behavior: df[df["year"] >= 1955])
+    if min_year is not None:
+        df = df[df[time_col] >= min_year]
+
+    # Apply industry filter (matching legacy 0.4 behavior: df[df["ind2d"] != 99])
+    if exclude_ind2d is not None:
+        if isinstance(exclude_ind2d, int):
+            exclude_ind2d = [exclude_ind2d]
+        df = df[~df["ind2d"].isin(exclude_ind2d)]
+
+    # Compute cost shares using De Loecker & Warzynski formula
     df["cost_share"] = df["cogs_D"] / df["sale_D"]
 
     # Merge elasticities
     df = df.merge(elasticities[["ind2d", "year", "theta_c"]], on=["ind2d", "year"], how="left")
 
-    # Compute markup
+    # Compute markup: mu = theta * (Revenue / COGS) = theta / cost_share
     df["markup"] = df["theta_c"] / df["cost_share"]
 
     # Select output columns

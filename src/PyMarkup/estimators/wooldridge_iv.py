@@ -38,7 +38,11 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
     industry_level : int
         NAICS digit level for industry grouping (2, 3, or 4)
     min_observations : int
-        Minimum observations required per window (default: 15)
+        Minimum observations required per window (default: 5)
+    drop_missing_sga : bool
+        If True, trim on cost share variables and require non-missing SG&A.
+        If False, trim on SG&A/sales ratio but allow missing SG&A.
+        (default: False, matching legacy behavior)
 
     Attributes
     ----------
@@ -57,7 +61,8 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
         specification: Literal["spec1", "spec2", "both"] = "spec2",
         window_years: int = 5,
         industry_level: int = 2,
-        min_observations: int = 15,
+        min_observations: int = 5,
+        drop_missing_sga: bool = False,
     ):
         if industry_level not in {2, 3, 4}:
             raise ValueError(f"industry_level must be 2, 3, or 4, got {industry_level}")
@@ -66,19 +71,48 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
         self.window_years = window_years
         self.industry_level = industry_level
         self.min_observations = min_observations
+        self.drop_missing_sga = drop_missing_sga
         self.results_ = None
 
     def get_method_name(self) -> str:
         """Return method name."""
-        return f"Wooldridge IV ({self.specification})"
+        sample = "DEU sample" if self.drop_missing_sga else "full sample"
+        return f"Wooldridge IV ({self.specification}, {sample})"
 
     def _preprocess(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Prepare data for IV estimation.
 
-        Creates log-transformed variables, polynomials, and lags.
+        Creates cost share variables, applies trimming, then creates
+        log-transformed variables, polynomials, and lags.
         """
         df = data.copy()
+
+        # Cost share trimming (matching legacy preprocess() logic)
+        df["costshare1"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
+        df["costshare2"] = df["cogs_D"] / (df["cogs_D"] + df["xsga_D"] + df["kexp"])
+
+        if self.drop_missing_sga:
+            # Trim on both cost share variables (p1-p99 by year)
+            for s in (1, 2):
+                p1 = df.groupby("year")[f"costshare{s}"].transform(lambda x: x.quantile(0.01))
+                p99 = df.groupby("year")[f"costshare{s}"].transform(lambda x: x.quantile(0.99))
+                df = df[
+                    (df[f"costshare{s}"] > 0)
+                    & df[f"costshare{s}"].notna()
+                    & (df[f"costshare{s}"] > p1)
+                    & (df[f"costshare{s}"] < p99)
+                ]
+        else:
+            # Trim on SG&A/sales ratio, but allow missing SG&A
+            # Use deflated values (xsga_D / sale_D gives same ratio as xsga / sale)
+            df["s_g2"] = df["xsga_D"] / df["sale_D"]
+            p1 = df.groupby("year")["s_g2"].transform(lambda x: x.quantile(0.01))
+            p99 = df.groupby("year")["s_g2"].transform(lambda x: x.quantile(0.99))
+            # Compute both conditions before filtering to avoid index alignment issues
+            mask = ((df["s_g2"] >= p1) | df["s_g2"].isna()) & ((df["s_g2"] <= p99) | df["s_g2"].isna())
+            df = df[mask]
+            df = df.drop(columns=["s_g2"])
 
         # Create firm ID if not exists
         if "id" not in df.columns:
@@ -108,6 +142,8 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
         df["Inv"] = df["K"] - (1 - df["depr"]) * df["L.K"]
         df["i"] = safe_log(df["Inv"])
         df["i2"] = df["i"] ** 2
+        df["i3"] = df["i"] ** 3
+        df["ik"] = df["i"] * df["k"]
 
         # Lags for instruments and controls
         df = add_lags(df, group="id", time="year", cols=["c", "k", "i", "lsga", "k2", "lsga2"])
