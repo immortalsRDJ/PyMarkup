@@ -113,6 +113,10 @@ class PipelineConfig:
     include_interest_cogs: bool = False
     trim_percentiles: tuple[float, float] = (0.01, 0.99)
 
+    # DEU sample filtering (optional)
+    use_deu_sample: bool = False
+    deu_observations_path: Path | None = None
+
     # Output
     output_dir: Path = Path("output/")
     save_intermediate: bool = True
@@ -132,6 +136,10 @@ class PipelineConfig:
         self.output_dir = Path(self.output_dir)
         self.data_dir = Path(self.data_dir)
 
+        # Convert DEU path if provided
+        if self.deu_observations_path is not None:
+            self.deu_observations_path = Path(self.deu_observations_path)
+
         # Load credentials from environment if not provided
         if not self.fred_api_key:
             self.fred_api_key = os.getenv("FRED_API_KEY", "")
@@ -141,6 +149,11 @@ class PipelineConfig:
         # Validate percentiles
         if not (0 <= self.trim_percentiles[0] < self.trim_percentiles[1] <= 1):
             raise ValueError(f"Invalid trim_percentiles: {self.trim_percentiles}")
+
+        # Validate DEU sample config
+        if self.use_deu_sample and self.deu_observations_path is None:
+            # Use default path
+            self.deu_observations_path = self.data_dir / "DLEU" / "DEU_observations.dta"
 
     def to_data_config(self):
         """Convert to DataConfig for use with downloaders."""
@@ -216,7 +229,11 @@ class PipelineConfig:
             # Download settings (only save if non-empty)
             "data_dir": str(self.data_dir),
             "generate_figures": self.generate_figures,
+            # DEU sample filtering
+            "use_deu_sample": self.use_deu_sample,
         }
+        if self.deu_observations_path is not None:
+            data["deu_observations_path"] = str(self.deu_observations_path)
         # Only include credentials if set (don't save empty strings)
         if self.fred_api_key:
             data["fred_api_key"] = self.fred_api_key

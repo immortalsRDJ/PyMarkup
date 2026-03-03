@@ -44,18 +44,20 @@ def plot_decomposition(
     save_path: Path | str | None = None,
 ) -> plt.Figure:
     """
-    Plot decomposition results as a 4-line chart.
+    Plot decomposition results as a 4-line chart (DLEU Figure IV style).
 
-    Shows aggregate markup change and its three components:
-    within, reallocation, and net entry.
+    Shows aggregate markup and three counterfactual paths based on the
+    decomposition, all starting from the same baseline year.
 
-    When base_markup is provided, the plot shows markup LEVELS where:
+    When base_markup is provided with cumulative=True, plots counterfactual
+    markup levels where ALL lines start at the same baseline:
     - Markup (benchmark) = base_markup + cumsum(aggregate_change)
-    - Within = base_markup/3 + cumsum(within)
-    - Reallocation = base_markup/3 + cumsum(reallocation)
-    - Net Entry = base_markup/3 + cumsum(net_entry)
+    - Within-only = base_markup + cumsum(within)
+    - Reallocation-only = base_markup + cumsum(reallocation)
+    - Net Entry-only = base_markup + cumsum(net_entry)
 
-    This ensures: Within + Reallocation + Net Entry = Markup (benchmark)
+    Each counterfactual line shows "what the markup would have been if only
+    this component operated" starting from the common baseline (DLEU 2020).
 
     Parameters
     ----------
@@ -67,8 +69,9 @@ def plot_decomposition(
         If True, plot cumulative sums (shows level changes from base period).
         If False, plot period-to-period changes.
     base_markup : float, optional
-        Base period aggregate markup level. If provided with cumulative=True,
-        plots actual markup levels (matching DLEU Figure IV style).
+        Base period aggregate markup level (e.g., 1.21 for 1980 in DLEU).
+        If provided with cumulative=True, plots counterfactual markup levels
+        where all lines start at this common baseline.
     title : str
         Plot title.
     figsize : tuple
@@ -90,15 +93,13 @@ def plot_decomposition(
     plot_data = decomposition[components].copy()
     if cumulative:
         plot_data = plot_data.cumsum()
-        # If base_markup provided, add it to show actual levels
-        # Distribute base_markup so that components sum to total
+        # If base_markup provided, all lines start at the same baseline
+        # This creates counterfactual paths: "what if only this component operated?"
         if base_markup is not None:
-            # Markup (benchmark) gets full base
             plot_data["aggregate_change"] = plot_data["aggregate_change"] + base_markup
-            # Each component gets 1/3 of base so they sum to total
-            plot_data["within"] = plot_data["within"] + base_markup / 3
-            plot_data["reallocation"] = plot_data["reallocation"] + base_markup / 3
-            plot_data["net_entry"] = plot_data["net_entry"] + base_markup / 3
+            plot_data["within"] = plot_data["within"] + base_markup
+            plot_data["reallocation"] = plot_data["reallocation"] + base_markup
+            plot_data["net_entry"] = plot_data["net_entry"] + base_markup
 
     fig, ax = plt.subplots(figsize=figsize)
 

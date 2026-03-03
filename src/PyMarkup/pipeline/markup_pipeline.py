@@ -113,11 +113,18 @@ class MarkupPipeline:
         logger.info("STEP 1: Data Preparation")
         logger.info("=" * 80)
 
+        # Determine DEU path if using DEU sample
+        deu_path = None
+        if self.config.use_deu_sample:
+            deu_path = self.config.deu_observations_path
+            logger.info(f"Using DEU sample filter: {deu_path}")
+
         self.panel_data = create_compustat_panel(
             compustat_path=self.config.compustat_path,
             macro_path=self.config.macro_vars_path,
             include_interest_cogs=self.config.include_interest_cogs,
             trim_percentiles=self.config.trim_percentiles,
+            deu_observations_path=deu_path,
         )
 
         if self.config.save_intermediate:

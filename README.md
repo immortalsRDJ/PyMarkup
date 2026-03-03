@@ -110,9 +110,10 @@ Alternatively, set environment variables: `FRED_API_KEY`, `WRDS_USERNAME`
 |-------------|-------------|------------|
 | Compustat (WRDS) | WRDS account | Register at [WRDS](https://wrds-www.wharton.upenn.edu/) |
 | CPI (FRED) | FRED API key | Free at [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) |
-| PPI (BLS) | None | Public data |
+| PPI (BLS) | None | Public data from [BLS](https://download.bls.gov/pub/time.series/pc/) |
 | Macro variables | N/A | Included in repo: `Input/DLEU/macro_vars_new.xlsx` |
 | NAICS descriptions | N/A | Included in repo: `Input/Other/NAICS_2D_Description.xlsx` |
+| DEU observations | N/A | Optional: Original DLEU paper firm-year sample (see below) |
 
 ## Pipeline Overview
 
@@ -132,6 +133,11 @@ download_ppi(config)        # No credentials needed
 download_cpi(config)        # Requires FRED API key
 download_compustat(config)  # Requires WRDS credentials
 ```
+
+**Data Sources:**
+- **PPI**: Bureau of Labor Statistics Producer Price Index data from https://download.bls.gov/pub/time.series/pc/
+- **CPI**: Federal Reserve Economic Data (FRED) Consumer Price Index
+- **Compustat**: WRDS Compustat Fundamentals Annual/Quarterly
 
 ### 2. Data Preparation
 
@@ -231,6 +237,30 @@ config = PipelineConfig(
     aggregation_weight="revenue",  # or "cost"
 )
 ```
+
+#### DEU Sample Filtering
+
+To replicate the original De Loecker, Eeckhout, and Unger (2020) paper results, you can filter the Compustat data to only include the firm-year observations from the original study:
+
+```yaml
+# config.yaml
+use_deu_sample: true
+deu_observations_path: "Input/DLEU/DEU_observations.dta"
+```
+
+Or via Python:
+
+```python
+config = PipelineConfig(
+    compustat_path="Input/DLEU/Compustat_annual.csv",
+    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
+    use_deu_sample=True,
+    deu_observations_path="Input/DLEU/DEU_observations.dta",
+    ...
+)
+```
+
+When enabled, the pipeline performs an inner merge on `gvkey` and `year` to filter to the original DLEU sample (approximately 242,000 firm-year observations from 1955-2016).
 
 ### 4. Markup Calculation
 

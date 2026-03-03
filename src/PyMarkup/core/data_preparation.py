@@ -137,6 +137,7 @@ def create_compustat_panel(
     macro_path: Path,
     include_interest_cogs: bool = False,
     trim_percentiles: tuple[float, float] = (0.01, 0.99),
+    deu_observations_path: Path | None = None,
 ) -> pd.DataFrame:
     """
     Create cleaned and trimmed Compustat panel for markup estimation.
@@ -148,6 +149,7 @@ def create_compustat_panel(
     4. Deflates by GDP
     5. Trims outliers
     6. Creates market share variables
+    7. Optionally filters to DEU sample (original DLEU paper observations)
 
     Parameters
     ----------
@@ -159,6 +161,9 @@ def create_compustat_panel(
         Whether to include interest expense in COGS
     trim_percentiles : tuple[float, float]
         Lower and upper percentiles for trimming
+    deu_observations_path : Path, optional
+        Path to DEU_observations.dta file. If provided, filters panel to only
+        include firm-years present in the original DLEU sample.
 
     Returns
     -------
@@ -168,7 +173,7 @@ def create_compustat_panel(
     logger.info(f"Loading Compustat from {compustat_path}")
     compustat_path = Path(compustat_path)
     if compustat_path.suffix.lower() == ".csv":
-        df = pd.read_csv(compustat_path, dtype={"naics": str})
+        df = pd.read_csv(compustat_path, dtype={"naics": str, "gvkey": str})
     elif compustat_path.suffix.lower() == ".dta":
         df = pd.read_stata(compustat_path)
     else:
@@ -275,6 +280,30 @@ def create_compustat_panel(
     # SG&A handling
     df["xsga"] = df["xsga"].replace({0: np.nan})
     df = df[df["xsga"].isna() | (df["xsga"] >= 0)]
+
+    # DEU sample filtering (optional)
+    # This matches Stata: joinby gvkey year using "rawData/deu_observations.dta"
+    if deu_observations_path is not None:
+        deu_observations_path = Path(deu_observations_path)
+        if deu_observations_path.exists():
+            logger.info(f"Filtering to DEU sample from {deu_observations_path}")
+            deu = pd.read_stata(deu_observations_path)
+
+            # Convert datetime year to integer if needed
+            if deu["year"].dtype == "datetime64[ns]":
+                deu["year"] = deu["year"].dt.year
+
+            # Ensure consistent types for merge
+            deu["gvkey"] = deu["gvkey"].astype(str).str.strip()
+            deu["year"] = deu["year"].astype(float)
+            df["gvkey"] = df["gvkey"].astype(str).str.strip()
+
+            n_before = len(df)
+            df = df.merge(deu[["gvkey", "year"]], on=["gvkey", "year"], how="inner")
+            n_after = len(df)
+            logger.info(f"DEU sample filtering: {n_before} -> {n_after} observations")
+        else:
+            logger.warning(f"DEU observations file not found: {deu_observations_path}")
 
     logger.info(f"Created panel with {len(df)} observations")
     return df
