@@ -173,6 +173,12 @@ class MarkupPipeline:
         """
         Compute firm-level markups from elasticities.
 
+        For cost_share method, uses direct firm-level computation under CRS:
+            markup = Revenue / (COGS + K)
+
+        For other methods (IV, ACF), merges industry-year elasticities and computes:
+            markup = theta / cost_share
+
         Parameters
         ----------
         elasticities : dict
@@ -191,12 +197,22 @@ class MarkupPipeline:
         for name, elast in elasticities.items():
             logger.info(f"\nComputing markups for {name}...")
             try:
-                markups = compute_markups(
-                    elasticities=elast,
-                    panel_data=self.panel_data,
-                )
+                # Cost share: use direct firm-level computation under CRS
+                if name == "cost_share" and "cost_share" in self.estimators:
+                    markups = self.estimators["cost_share"].compute_firm_markups(
+                        data=self.panel_data,
+                        apply_trim=True,
+                    )
+                    logger.info(f"✓ {name}: computed direct firm-level markups for {len(markups)} firm-years")
+                else:
+                    # IV and ACF: merge industry-year theta and compute markup
+                    markups = compute_markups(
+                        elasticities=elast,
+                        panel_data=self.panel_data,
+                    )
+                    logger.info(f"✓ {name}: computed markups for {len(markups)} firm-years")
+
                 all_markups[name] = markups
-                logger.info(f"✓ {name}: computed markups for {len(markups)} firm-years")
 
                 if self.config.save_intermediate:
                     output_path = self.config.output_dir / "intermediate" / f"markups_{name}.csv"
@@ -436,7 +452,7 @@ class MarkupPipeline:
         intermediate_dir = self.config.output_dir / "intermediate"
         intermediate_dir.mkdir(parents=True, exist_ok=True)
 
-        # Only run decomposition for IV and Cost Share (not ACF)
+        # Run decomposition for IV and Cost Share only
         methods_to_decompose = ["wooldridge_iv", "cost_share"]
         method_labels = {
             "wooldridge_iv": "Wooldridge IV",

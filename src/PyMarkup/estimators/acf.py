@@ -87,11 +87,19 @@ class ACFEstimator(ProductionFunctionEstimator):
         """Prepare data for ACF estimation."""
         df = data.copy()
 
+        # Filter out invalid observations (values <= 0 cause log = -inf)
+        n_before = len(df)
+        df = df[(df["capital_D"] > 0) & (df["cogs_D"] > 0) & (df["sale_D"] > 0)]
+        df = df.dropna(subset=["capital_D", "cogs_D", "sale_D"])
+        n_after = len(df)
+        if n_before > n_after:
+            logger.info(f"Filtered {n_before - n_after} obs with non-positive values (capital_D/cogs_D/sale_D <= 0)")
+
         # Create firm ID if not exists
         if "id" not in df.columns:
             df["id"] = df["gvkey"].astype("category").cat.codes
 
-        # Log-transform variables
+        # Log-transform variables (now safe, all values > 0)
         df["y"] = np.log(df["sale_D"])
         df["c"] = np.log(df["cogs_D"])
         df["k"] = np.log(df["capital_D"])
@@ -193,13 +201,20 @@ class ACFEstimator(ProductionFunctionEstimator):
         X_phi = sm.add_constant(X_phi)
         y_phi = df["y"]
 
+        # Check for inf/nan in exog variables and filter them out
+        valid_mask = ~(X_phi.isin([np.inf, -np.inf]).any(axis=1) | X_phi.isna().any(axis=1))
+        valid_mask = valid_mask & y_phi.notna() & ~y_phi.isin([np.inf, -np.inf])
+        X_phi = X_phi[valid_mask]
+        y_phi = y_phi[valid_mask]
+        df = df[valid_mask]
+
         # Check sufficient observations
-        if y_phi.dropna().shape[0] < len(phi_reg_cols) + 5:
+        if len(y_phi) < len(phi_reg_cols) + 5:
             return None
 
         # OLS for first stage
         try:
-            phi_model = sm.OLS(y_phi, X_phi, missing="drop").fit()
+            phi_model = sm.OLS(y_phi, X_phi).fit()
         except Exception as exc:
             logger.warning(f"First-stage OLS failed: {exc}")
             return None

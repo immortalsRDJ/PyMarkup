@@ -315,10 +315,12 @@ op = OlleyPakesDecomposition(
 decomp_results = op.decompose(firm_markups)
 
 # Plot with cumulative markup levels (DLEU Figure IV style)
+# All lines start at the same baseline and show counterfactual paths:
+# "What would markup be if only this component operated?"
 plot_decomposition(
     decomp_results,
     cumulative=True,
-    base_markup=1.2,  # Base period aggregate markup
+    base_markup=1.21,  # Base period aggregate markup (e.g., 1980 value)
     save_path="Output/decomposition.pdf",
 )
 ```
