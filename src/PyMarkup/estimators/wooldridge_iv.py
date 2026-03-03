@@ -114,9 +114,22 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
             df = df[mask]
             df = df.drop(columns=["s_g2"])
 
+        # Filter out invalid observations (capital_D <= 0 causes k = -inf)
+        df = df[(df["capital_D"] > 0) & (df["cogs_D"] > 0) & (df["sale_D"] > 0)]
+        df = df.dropna(subset=["capital_D", "cogs_D", "sale_D"])
+
         # Create firm ID if not exists
         if "id" not in df.columns:
             df["id"] = df["gvkey"].astype("category").cat.codes
+
+        # Merge industry 49 into 48 (too few observations in ind 49)
+        # This matches Stata: replace ind2d_fix = 48 if ind2d==49
+        df["ind2d_fix"] = df["ind2d"].copy()
+        df.loc[df["ind2d_fix"] == 49, "ind2d_fix"] = 48
+
+        # Create sequential industry group numbers (like Stata's egen nrind2 = group(ind2d_fix))
+        # This creates 1, 2, 3, ... instead of original codes like 11, 21, 22, ...
+        df["nrind2"] = df["ind2d_fix"].astype("category").cat.codes + 1
 
         # Log-transform main variables
         df["r"] = np.log(df["sale_D"])  # Output (revenue)
@@ -292,8 +305,9 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                 mask = (res[ind_col] == s) & (res["year"] < 1970)
                 estimate_for_subset(subset, mask)
 
-        # Early windows: industries 18-25 (before 1970)
-        for s in range(18, 26):
+        # Early windows: industries 18-22 (before 1970)
+        # Note: Stata code only goes to industry 22, not 25
+        for s in range(18, 23):
             subset = df[
                 (df[ind_col] == s) & (df["year"] < 1972) & df[["r", "c", "k", "L.c", "L.i", "L.k"]].notna().all(axis=1)
             ]
@@ -326,8 +340,8 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
                     mask = (res[ind_col] == s) & (res["year"] == t)
                     estimate_for_subset(subset, mask)
 
-            # Industries 18-25
-            for s in range(18, 26):
+            # Industries 18-22
+            for s in range(18, 23):
                 subset = df[
                     (df[ind_col] == s)
                     & window_mask

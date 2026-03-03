@@ -267,8 +267,10 @@ def create_compustat_panel(
     df = df[df["sale_D"].notna() & df["cogs_D"].notna()]
     df = df[df["year"] > 1949]
 
-    # Trim
-    df = trim_sale_cogs_ratio(df, lower=trim_percentiles[0], upper=trim_percentiles[1])
+    # Note: Trimming on sale/cogs ratio is NOT done here to match Stata code.
+    # The Stata code (Estimate_Coefficients.do) only trims on xsga/sale ratio
+    # (when dropmissingsga=0) or costshare variables (when dropmissingsga=1).
+    # This trimming is done in the estimator's _preprocess() method instead.
 
     # SG&A handling
     df["xsga"] = df["xsga"].replace({0: np.nan})

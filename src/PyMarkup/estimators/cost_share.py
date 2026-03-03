@@ -21,12 +21,18 @@ class CostShareEstimator(ProductionFunctionEstimator):
     assuming constant returns to scale and perfect competition in input markets.
 
     The output elasticity is:
-        theta_c = cost_share = COGS / (COGS + K_expense [+ SG&A])
+        theta_c = cost_share = COGS / (COGS + K_expense)
+
+    Note: Following the original Stata code (Estimate_Coefficients.do),
+    the output cost share always uses the formula WITHOUT SG&A (costshare1),
+    regardless of the include_sga parameter. The include_sga parameter is
+    retained for API compatibility but does not affect the output.
 
     Parameters
     ----------
     include_sga : bool
-        Whether to include SG&A in total costs (default: False)
+        Retained for API compatibility. Does not affect output formula.
+        (default: False)
     aggregation : {"median", "mean", "weighted_mean"}
         How to aggregate cost shares within industry-year
     industry_level : int
@@ -59,8 +65,7 @@ class CostShareEstimator(ProductionFunctionEstimator):
 
     def get_method_name(self) -> str:
         """Return method name."""
-        sga_str = "with SG&A" if self.include_sga else "COGS only"
-        return f"Cost Share ({sga_str}, {self.aggregation})"
+        return f"Cost Share (COGS only, {self.aggregation})"
 
     def estimate_elasticities(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -102,10 +107,11 @@ class CostShareEstimator(ProductionFunctionEstimator):
             raise ValueError(f"Missing required columns: {missing_cols}")
 
         # Compute firm-level cost shares
-        if self.include_sga:
-            df["costshare"] = df["cogs_D"] / (df["cogs_D"] + df["xsga_D"] + df["kexp"])
-        else:
-            df["costshare"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
+        # Note: Following Stata code, the OUTPUT cost share always uses costshare1
+        # (without SG&A). The include_sga flag only affects trimming behavior.
+        # See Estimate_Coefficients.do lines 214-217:
+        #   bysort year ind2d: egen cs2d = median(costshare1)
+        df["costshare"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
 
         # Remove invalid cost shares
         df = df[df["costshare"].notna() & (df["costshare"] > 0) & (df["costshare"] < 1)]
