@@ -484,11 +484,20 @@ class MarkupPipeline:
                 decomp_data = decomp_data[decomp_data["markup"] < 50]  # Remove extreme outliers
 
                 # Compute base period aggregate markup (revenue-weighted)
-                base_year = decomp_data["year"].min()
-                base_data = decomp_data[decomp_data["year"] == base_year]
+                # Use decomposition_start_year (default 1980) as in DLEU Figure IV
+                start_year = self.config.decomposition_start_year
+                base_data = decomp_data[decomp_data["year"] == start_year]
+                if base_data.empty:
+                    # Fall back to earliest available year
+                    start_year = int(decomp_data["year"].min())
+                    base_data = decomp_data[decomp_data["year"] == start_year]
+                    logger.warning(
+                        f"  Start year {self.config.decomposition_start_year} not in data, "
+                        f"falling back to {start_year}"
+                    )
                 base_total_sales = base_data["sale_D"].sum()
                 base_markup = (base_data["markup"] * base_data["sale_D"]).sum() / base_total_sales
-                logger.info(f"  Base year {base_year} aggregate markup: {base_markup:.4f}")
+                logger.info(f"  Base year {start_year} aggregate markup: {base_markup:.4f}")
 
                 # Run decomposition
                 op = OlleyPakesDecomposition(
@@ -505,14 +514,16 @@ class MarkupPipeline:
                 logger.info(f"  Saved decomposition_{method_name}.csv")
 
                 # Generate plot (cumulative values with base markup level)
-                year_min = int(decomp_results.index.min())
+                # Use start_year to match DLEU Figure IV (all lines begin at
+                # base_markup in 1980)
                 year_max = int(decomp_results.index.max())
-                filename = f"Decomposition - {label} ({year_min}-{year_max}).pdf"
+                filename = f"Decomposition - {label} ({start_year}-{year_max}).pdf"
 
                 fig = plot_decomposition(
                     decomp_results,
                     cumulative=True,
                     base_markup=base_markup,
+                    start_year=start_year,
                     title=f"Decomposition of Markup Growth - {label}",
                     save_path=fig_dir / filename,
                 )

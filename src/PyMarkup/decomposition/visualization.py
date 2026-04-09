@@ -39,25 +39,23 @@ def plot_decomposition(
     decomposition: pd.DataFrame,
     cumulative: bool = False,
     base_markup: float | None = None,
-    title: str = "Dynamic Olley-Pakes Decomposition of Markup Changes",
+    start_year: int | None = None,
+    title: str = "Decomposition of Markup Growth at the Firm Level",
     figsize: tuple[int, int] = (15, 10),
     save_path: Path | str | None = None,
 ) -> plt.Figure:
     """
-    Plot decomposition results as a 4-line chart (DLEU Figure IV style).
+    Plot decomposition results as a 4-line chart replicating DLEU Figure IV.
 
-    Shows aggregate markup and three counterfactual paths based on the
-    decomposition, all starting from the same baseline year.
+    Replicates Figure IV from De Loecker, Eeckhout & Unger (2020, QJE):
+    "Decomposition of Markup Growth at the Firm Level". All four lines
+    start at the same base_markup level (e.g., 1.21 in 1980) and diverge
+    as each component accumulates over time.
 
-    When base_markup is provided with cumulative=True, plots counterfactual
-    markup levels where ALL lines start at the same baseline:
-    - Markup (benchmark) = base_markup + cumsum(aggregate_change)
-    - Within-only = base_markup + cumsum(within)
-    - Reallocation-only = base_markup + cumsum(reallocation)
-    - Net Entry-only = base_markup + cumsum(net_entry)
-
-    Each counterfactual line shows "what the markup would have been if only
-    this component operated" starting from the common baseline (DLEU 2020).
+    When start_year and base_markup are provided, the plot:
+    - Filters decomposition data to periods >= start_year
+    - Prepends a base-year anchor row so all lines visibly start at base_markup
+    - Accumulates each component from the base year forward
 
     Parameters
     ----------
@@ -72,6 +70,11 @@ def plot_decomposition(
         Base period aggregate markup level (e.g., 1.21 for 1980 in DLEU).
         If provided with cumulative=True, plots counterfactual markup levels
         where all lines start at this common baseline.
+    start_year : int, optional
+        First year to display (e.g., 1980 for DLEU Figure IV).
+        When used with base_markup, a zero-change anchor row is prepended at
+        this year so all four lines visibly converge at the baseline.
+        Decomposition rows before start_year are excluded.
     title : str
         Plot title.
     figsize : tuple
@@ -91,19 +94,29 @@ def plot_decomposition(
             raise ValueError(f"Missing column: {col}")
 
     plot_data = decomposition[components].copy()
+
+    # Filter to start_year onward (decomposition index holds the "to" period,
+    # so rows with index >= start_year+1 represent changes *after* start_year)
+    if start_year is not None:
+        plot_data = plot_data[plot_data.index > start_year]
+
     if cumulative:
         plot_data = plot_data.cumsum()
-        # If base_markup provided, all lines start at the same baseline
-        # This creates counterfactual paths: "what if only this component operated?"
         if base_markup is not None:
-            plot_data["aggregate_change"] = plot_data["aggregate_change"] + base_markup
-            plot_data["within"] = plot_data["within"] + base_markup
-            plot_data["reallocation"] = plot_data["reallocation"] + base_markup
-            plot_data["net_entry"] = plot_data["net_entry"] + base_markup
+            # Prepend base-year anchor row so all lines start at base_markup
+            if start_year is not None:
+                anchor = pd.DataFrame(
+                    {col: [0.0] for col in components}, index=[start_year]
+                )
+                anchor.index.name = plot_data.index.name
+                plot_data = pd.concat([anchor, plot_data])
+            # Shift all lines to start at base_markup
+            for col in components:
+                plot_data[col] = plot_data[col] + base_markup
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    # Style matching DLEU Figure IV
+    # Style matching DLEU Figure IV exactly
     ax.plot(plot_data.index, plot_data["aggregate_change"],
             color="red", linestyle="-", linewidth=3, label="Markup (benchmark)")
     ax.plot(plot_data.index, plot_data["within"],

@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## Important Rules
 
 **DO NOT delete old version code.** The numbered scripts (0.0, 0.1, 0.2, etc.) are legacy code that should be preserved. New functionality goes in the package modules (`data/`, `estimators/`, `pipeline/`, etc.), not by replacing old scripts.
@@ -7,11 +9,15 @@
 ## Development Commands
 
 ```bash
-just test       # Run tests with Python 3.13
-just testall    # Run tests for Python 3.10-3.13
-just qa         # Run all QA checks (format, lint, type check, test)
-just coverage   # Run coverage analysis
-just build      # Build the package
+just test              # Run tests with Python 3.13
+just test tests/test_estimators.py::test_wooldridge_iv  # Run single test
+just testall           # Run tests for Python 3.10-3.13
+just qa                # Run all QA checks (format, lint, type check, test)
+just coverage          # Run coverage analysis
+just pdb               # Drop into debugger on test failure
+just build             # Build the package
+uv sync                # Install dependencies
+uv sync --extra wrds   # Include WRDS support
 ```
 
 ## Directory Structure
@@ -106,3 +112,71 @@ Config options: `iv_specification`, `cs_include_sga`, `acf_include_sga`
 - FRED API key for CPI download
 - `Input/DLEU/macro_vars_new.xlsx`: Macro variables (USGDP, usercost)
 - `Input/Other/NAICS_2D_Description.xlsx`: Industry code lookup
+
+## Pipeline Architecture (5 Steps)
+
+The `MarkupPipeline` class orchestrates a 5-step research workflow:
+
+1. **Data Download** (`run_download()`) - Fetch Compustat, CPI, PPI from WRDS/FRED/BLS
+2. **Data Preparation** (`run_data_preparation()`) - Dedupe, deflate, trim outliers → `panel_data.csv`
+3. **Elasticity Estimation** (`run_estimation()`) - Estimate θ by industry-year → `elasticities_{method}.csv`
+4. **Markup Calculation** (`run_markup_calculation()`) - `markup = θ / cost_share` → `markups_{method}.csv`
+5. **Decomposition** (`run_decomposition()`) - Olley-Pakes decomposition → `decomposition_{method}.csv`
+
+```python
+from PyMarkup import MarkupPipeline, PipelineConfig, EstimatorConfig
+
+config = PipelineConfig(
+    compustat_path="Input/DLEU/Compustat_annual.csv",
+    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
+    estimator=EstimatorConfig(method="wooldridge_iv"),
+)
+pipeline = MarkupPipeline(config)
+results = pipeline.run()
+```
+
+## Figure Generation
+
+### Aggregate Markup Plot (`core/figures.py`)
+- `plot_aggregate_markup_single_method()`: Time series with DLEU benchmark comparison
+- Lines: DLEU benchmark, Replication (all firms), PPI-matched firms
+- Output: `Output/figures/Aggregate Markup Comparison - {method} (YYYY-YYYY, Annual).pdf`
+
+### PPI vs Markup Scatter (`core/figures.py`)
+- `plot_markup_vs_ppi()`: Industry CAGR of PPI vs CAGR of markups
+- Output: `Output/figures/ppi_vs_markup_{method}.pdf`
+
+### Decomposition Plot (`decomposition/visualization.py`)
+Dynamic Olley-Pakes decomposition showing counterfactual markup paths:
+
+```python
+from PyMarkup import plot_decomposition
+
+plot_decomposition(
+    decomposition_df,
+    cumulative=True,           # Plot cumulative changes
+    base_markup=1.21,          # Starting markup level (e.g., 1980 value)
+    save_path="Output/figures/Decomposition.pdf"
+)
+```
+
+**Lines (DLEU Figure IV style):**
+- **Red solid**: Markup (benchmark) = actual aggregate change
+- **Blue dashed**: Within = base + cumsum(within component)
+- **Black dotted**: Reallocation = base + cumsum(reallocation component)
+- **Green dash-dot**: Net Entry = base + cumsum(net_entry component)
+
+When `base_markup` is provided, all 4 lines start at the same baseline, showing "what would markup have been if only this component operated?"
+
+**Decomposition formula:**
+```
+ΔMarkup(t) = Within + Reallocation + Net_Entry
+```
+- **Within**: Markup changes within continuing firms at base-period market shares
+- **Reallocation**: Market share shifts toward/away from high/low-markup firms
+- **Net Entry**: Markup difference between entrants vs exiters
+
+### Plot Styling
+All figures use consistent styling via `_apply_decomp_style()` or `_apply_agg_style()`:
+- Seaborn whitegrid, 26pt fonts, (15,10) figsize, 3pt linewidth
+- Color cycle: `['#252525', '#636363', '#969696', '#bdbdbd']`

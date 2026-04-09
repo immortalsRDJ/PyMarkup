@@ -218,8 +218,8 @@ Input/DLEU/*
 Input/Other/*
 !Input/Other/NAICS_2D_Description.xlsx
 Intermediate/
-Output/
-Output/report/
+# Output/
+# Output/report/
 
 # Config with API keys (use config.example.yaml as template)
 config.yaml

@@ -593,6 +593,141 @@ def figure4_top_markup_firms(
     return fig
 
 
+def figure5_top_firms_annual(
+    cache: PipelineCache,
+    method: str = "wooldridge_iv",
+    output_dir: Path = Path("Output/report"),
+    year_start: int = 1980,
+    year_end: int = 2016,
+    top_n: int = 10,
+    min_weight: float = 0.001,
+) -> plt.Figure:
+    """
+    Figure 5: Markup trajectories of top firms over time (line graph).
+
+    Selects firms that appear most frequently in the top-N markup ranking
+    (filtered by minimum market share) across all years, then plots each
+    firm's markup as a line over time. Firm names are labelled at the
+    right end of each line.
+    """
+    logger.info("=" * 60)
+    logger.info(f"Figure 5: Top Markup Firms Line Graph ({year_start}-{year_end})")
+    logger.info("=" * 60)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get cached results (use full sample)
+    full_data = cache.get_full_sample()
+    markups = full_data["markups"][method]
+    panel_data = full_data["panel_data"]
+
+    # Merge markups with panel data
+    df = markups.merge(
+        panel_data[["gvkey", "year", "sale_D", "conm"]],
+        on=["gvkey", "year"],
+        how="left",
+    )
+    df = df[df["markup"].notna() & (df["markup"] > 0) & (df["markup"] < 50)]
+    df["weight"] = df.groupby("year")["sale_D"].transform(lambda x: x / x.sum())
+
+    # Filter to year range and minimum weight
+    df = df[(df["year"] >= year_start) & (df["year"] <= year_end)]
+    df = df[df["weight"] >= min_weight]
+
+    if df.empty:
+        logger.warning("No data in range")
+        return plt.figure()
+
+    # For each year, flag which firms are in the top N
+    df["rank"] = df.groupby("year")["markup"].rank(ascending=False, method="first")
+    df["is_top"] = df["rank"] <= top_n
+
+    # Pick a canonical company name per gvkey (most recent)
+    name_map = (
+        df.sort_values("year")
+        .drop_duplicates(subset="gvkey", keep="last")
+        .set_index("gvkey")["conm"]
+    )
+
+    # Count how many years each firm appears in the top N
+    top_counts = (
+        df[df["is_top"]]
+        .groupby("gvkey")
+        .size()
+        .sort_values(ascending=False)
+    )
+
+    # Select firms: those that appear in top N most frequently
+    selected_gvkeys = top_counts.head(top_n).index.tolist()
+    logger.info(f"Selected {len(selected_gvkeys)} firms appearing most in top {top_n}")
+
+    for gvkey in selected_gvkeys:
+        name = name_map.get(gvkey, gvkey)
+        count = top_counts[gvkey]
+        logger.info(f"  {str(name)[:30]:30s}  top-{top_n} in {count} years")
+
+    # Build line data: one series per firm
+    plot_df = df[df["gvkey"].isin(selected_gvkeys)].copy()
+    plot_df["name"] = plot_df["gvkey"].map(name_map)
+
+    # Plot
+    setup_plot_style()
+    fig, ax = plt.subplots(figsize=(16, 10))
+
+    # Use a qualitative colormap with enough distinct colours
+    cmap = plt.cm.get_cmap("tab20", len(selected_gvkeys))
+
+    for i, gvkey in enumerate(selected_gvkeys):
+        firm = plot_df[plot_df["gvkey"] == gvkey].sort_values("year")
+        name = name_map.get(gvkey, str(gvkey))
+        short_name = name[:22] if pd.notna(name) else str(gvkey)
+
+        ax.plot(
+            firm["year"], firm["markup"],
+            color=cmap(i), linewidth=2, alpha=0.85,
+            marker="o", markersize=3,
+        )
+        # Label at the right end of each line
+        last = firm.iloc[-1]
+        ax.text(
+            last["year"] + 0.3, last["markup"], short_name,
+            fontsize=9, va="center", color=cmap(i), fontweight="bold",
+        )
+
+    ax.axhline(1, color="grey", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Markup")
+    ax.set_title(
+        f"Markup Trajectories of Top {top_n} Firms "
+        f"({method.replace('_', ' ').title()}, {year_start}-{year_end})",
+    )
+    ax.set_xlim(year_start - 0.5, year_end + 5)  # extra room for labels
+
+    fig.tight_layout()
+
+    # Save
+    save_path = output_dir / f"Figure5_TopFirms_Annual_{year_start}_{year_end}_{method}.pdf"
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    logger.info(f"Saved: {save_path}")
+
+    save_path_png = output_dir / f"Figure5_TopFirms_Annual_{year_start}_{year_end}_{method}.png"
+    fig.savefig(save_path_png, dpi=150, bbox_inches="tight")
+
+    # Save data
+    all_tops = []
+    for year in sorted(df["year"].unique()):
+        ydf = df[df["year"] == year]
+        top = ydf.nlargest(top_n, "markup")[["conm", "gvkey", "year", "markup", "weight", "sale_D"]]
+        top["rank"] = range(1, len(top) + 1)
+        all_tops.append(top)
+    if all_tops:
+        pd.concat(all_tops).to_csv(
+            output_dir / f"Figure5_data_{year_start}_{year_end}_{method}.csv", index=False
+        )
+
+    return fig
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate report figures for markup analysis")
     parser.add_argument("--config", type=Path, default=Path("config.yaml"), help="Path to config.yaml")
@@ -600,11 +735,14 @@ def main():
                         choices=["wooldridge_iv", "cost_share", "acf"],
                         help="Estimation method to use")
     parser.add_argument("--output-dir", type=Path, default=Path("Output/report"), help="Output directory")
-    parser.add_argument("--figures", type=str, default="1,2,3,4", help="Comma-separated list of figures to generate (1,2,3,4)")
+    parser.add_argument("--figures", type=str, default="1,2,3,4", help="Comma-separated list of figures to generate (1,2,3,4,5)")
     parser.add_argument("--base-year", type=int, default=1980, help="Base year for Figure 3")
     parser.add_argument("--end-year", type=int, default=2016, help="End year for Figure 3")
     parser.add_argument("--fig4-year1", type=int, default=2008, help="First year for Figure 4")
     parser.add_argument("--fig4-year2", type=int, default=2020, help="Second year for Figure 4")
+    parser.add_argument("--fig5-start", type=int, default=1980, help="Start year for Figure 5 annual panels")
+    parser.add_argument("--fig5-end", type=int, default=2016, help="End year for Figure 5 annual panels")
+    parser.add_argument("--fig5-topn", type=int, default=10, help="Number of top firms per year in Figure 5")
     args = parser.parse_args()
 
     figures_to_generate = [int(x.strip()) for x in args.figures.split(",")]
@@ -645,6 +783,15 @@ def main():
             year1=args.fig4_year1, year2=args.fig4_year2,
         )
         plt.close(fig4)
+
+    if 5 in figures_to_generate:
+        logger.info("\n" + "=" * 60)
+        fig5 = figure5_top_firms_annual(
+            cache, args.method, args.output_dir,
+            year_start=args.fig5_start, year_end=args.fig5_end,
+            top_n=args.fig5_topn,
+        )
+        plt.close(fig5)
 
     logger.info("\n" + "=" * 60)
     logger.info("All figures generated successfully!")

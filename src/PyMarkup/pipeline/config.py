@@ -129,6 +129,9 @@ class PipelineConfig:
     # Pipeline behavior
     generate_figures: bool = False
 
+    # Decomposition settings
+    decomposition_start_year: int = 1980
+
     def __post_init__(self):
         """Convert strings to Path objects and validate."""
         self.compustat_path = Path(self.compustat_path)
@@ -229,6 +232,8 @@ class PipelineConfig:
             # Download settings (only save if non-empty)
             "data_dir": str(self.data_dir),
             "generate_figures": self.generate_figures,
+            # Decomposition settings
+            "decomposition_start_year": self.decomposition_start_year,
             # DEU sample filtering
             "use_deu_sample": self.use_deu_sample,
         }
