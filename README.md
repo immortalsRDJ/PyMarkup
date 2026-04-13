@@ -30,16 +30,6 @@ pymarkup run-all --config config.yaml
 
 # Skip download (use existing data)
 pymarkup run-all --config config.yaml --skip-download
-
-# Download data only
-pymarkup download ppi                        # PPI (no credentials needed)
-pymarkup download cpi --config config.yaml   # CPI (needs FRED API key)
-pymarkup download all --config config.yaml   # All datasets
-
-# Other commands
-pymarkup estimate --config config.yaml       # Estimation only
-pymarkup run-all --config config.yaml --skip-compustat --no-figures
-pymarkup version
 ```
 
 ## Pipeline
