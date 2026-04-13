@@ -1,6 +1,6 @@
-# Pymkp
+# PyMarkup
 
-A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery, following [De Loecker, Eeckhout, and Unger (2020)](https://doi.org/10.1093/qje/qjz041).
+A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery.
 
 ## Installation
 

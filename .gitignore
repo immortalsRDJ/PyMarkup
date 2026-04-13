@@ -236,10 +236,12 @@ config.yaml
 src/BMYReplication/
 
 # Dev/internal files
+tests/
 justfile
 MANIFEST.in
 tmp_patch.txt
 dashboard.md
+CLAUDE.md
 *.pdf
 
 # Legacy numbered scripts (replaced by package modules)
@@ -253,3 +255,16 @@ src/PyMarkup/1.*
 src/PyMarkup/2.*
 src/PyMarkup/3.*
 src/PyMarkup/4.*
+
+# Legacy loose files in src/PyMarkup/ (replaced by modules)
+src/PyMarkup/Create_Data.py
+src/PyMarkup/Create_Data.do
+src/PyMarkup/Estimate_Coefficients.py
+src/PyMarkup/Estimate_Coefficients.do
+src/PyMarkup/PyMarkup.py
+src/PyMarkup/cli.py
+src/PyMarkup/macro_var_calculation.py
+src/PyMarkup/path_plot_config.py
+src/PyMarkup/requirements.txt
+src/PyMarkup/run_all.py
+src/PyMarkup/utils.py
