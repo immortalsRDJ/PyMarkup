@@ -209,6 +209,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+
+.editorconfig
+.env.*
+
 # Project data directories (large binaries not tracked in git)
 Input/*
 !Input/DLEU/
@@ -232,7 +236,6 @@ config.yaml
 src/BMYReplication/
 
 # Dev/internal files
-tests/
 justfile
 MANIFEST.in
 tmp_patch.txt
