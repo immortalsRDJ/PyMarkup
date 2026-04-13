@@ -6,7 +6,7 @@ from pathlib import Path
 
 st.set_page_config(page_title="Pymkp Markup Tracker", layout="wide")
 
-DATA_DIR = Path(__file__).parent / "data" / "dashboard"
+DATA_DIR = Path(__file__).parent / "data"
 
 
 @st.cache_data
