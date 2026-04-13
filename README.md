@@ -1,16 +1,14 @@
-# PyMarkup
+# Pymkp
 
-A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery.
+A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery, following [De Loecker, Eeckhout, and Unger (2020)](https://doi.org/10.1093/qje/qjz041).
 
 ## Installation
-
-### From PyPI
 
 ```bash
 pip install Pymkp
 ```
 
-### From Source (for development)
+For development:
 
 ```bash
 git clone https://github.com/immortalsRDJ/PyMarkup
@@ -18,149 +16,48 @@ cd PyMarkup
 uv sync
 ```
 
-For WRDS data downloads, add the `wrds` extra:
-
-```bash
-pip install Pymkp[wrds]
-# or from source:
-uv sync --extra wrds
-```
-
 ## Quick Start
 
-### Option 1: Command Line (Recommended)
+### Command Line
 
 ```bash
-# 1. Set up config file
+# Set up config
 cp config.example.yaml config.yaml
-# Edit config.yaml with your API keys and settings
+# Edit config.yaml with your API keys
 
-# 2. Run the full pipeline
-uv run pymarkup run-all --config config.yaml
+# Run full pipeline (download + estimate + figures)
+pymarkup run-all --config config.yaml
 
-# Or skip data download if you already have the data
-uv run pymarkup run-all --config config.yaml --skip-download
-```
+# Skip download (use existing data)
+pymarkup run-all --config config.yaml --skip-download
 
-### Option 2: Python Script
-
-```python
-from PyMarkup import MarkupPipeline, PipelineConfig, EstimatorConfig
-
-config = PipelineConfig(
-    compustat_path="Input/DLEU/Compustat_annual.csv",
-    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
-    estimator=EstimatorConfig(method="wooldridge_iv"),
-)
-
-pipeline = MarkupPipeline(config)
-results = pipeline.run()
-results.save(output_dir="Output/", format="csv")
-```
-
-## Command Line Reference
-
-### Full Pipeline
-
-```bash
-# Run everything (download + estimate + figures)
-uv run pymarkup run-all --config config.yaml
-
-# Skip all downloads (use existing data)
-uv run pymarkup run-all --config config.yaml --skip-download
-
-# Skip only Compustat download (no WRDS credentials needed)
-uv run pymarkup run-all --config config.yaml --skip-compustat
-
-# Skip figure generation
-uv run pymarkup run-all --config config.yaml --no-figures
-
-# Verbose output for debugging
-uv run pymarkup run-all --config config.yaml -v
-```
-
-### Individual Commands
-
-```bash
 # Download data only
-uv run pymarkup download ppi                        # PPI (no credentials needed)
-uv run pymarkup download cpi --config config.yaml   # CPI (needs FRED API key)
-uv run pymarkup download all --config config.yaml   # All datasets
+pymarkup download ppi                        # PPI (no credentials needed)
+pymarkup download cpi --config config.yaml   # CPI (needs FRED API key)
+pymarkup download all --config config.yaml   # All datasets
 
-# Run estimation only (requires existing data)
-uv run pymarkup estimate --config config.yaml
-
-# Validate input data
-uv run pymarkup validate Input/DLEU/Compustat_annual.csv
-
-# Check version
-uv run pymarkup version
+# Other commands
+pymarkup estimate --config config.yaml       # Estimation only
+pymarkup run-all --config config.yaml --skip-compustat --no-figures
+pymarkup version
 ```
 
-## Configuration
-
-### Setting Up Credentials
-
-1. Copy the example config file:
-   ```bash
-   cp config.example.yaml config.yaml
-   ```
-
-2. Edit `config.yaml` with your credentials:
-   ```yaml
-   fred_api_key: "your-fred-api-key"
-   wrds_username: "your-wrds-username"
-   ```
-
-Alternatively, set environment variables: `FRED_API_KEY`, `WRDS_USERNAME`
-
-### Data Requirements
-
-| Data Source | Credentials | How to Get |
-|-------------|-------------|------------|
-| Compustat (WRDS) | WRDS account | Register at [WRDS](https://wrds-www.wharton.upenn.edu/) |
-| CPI (FRED) | FRED API key | Free at [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) |
-| PPI (BLS) | None | Public data from [BLS](https://download.bls.gov/pub/time.series/pc/) |
-| Macro variables | N/A | Included in repo: `Input/DLEU/macro_vars_new.xlsx` |
-| NAICS descriptions | N/A | Included in repo: `Input/Other/NAICS_2D_Description.xlsx` |
-| DEU observations | N/A | Optional: Original DLEU paper firm-year sample (see below) |
-
-## Pipeline Overview
+## Pipeline
 
 ```
-Download -> Data Preparation -> Elasticity Estimation -> Markup Calculation -> Figures & Decomposition
+Download --> Data Preparation --> Elasticity Estimation --> Markup Calculation --> Figures & Decomposition
 ```
 
-### 1. Data Download
+| Step | What it does | Key function |
+|------|-------------|--------------|
+| 0. Download | Fetch Compustat, CPI, PPI from WRDS/FRED/BLS | `pipeline.run_download()` |
+| 1. Data Prep | Dedupe, deflate by GDP, compute market shares, trim outliers | `pipeline.run_data_preparation()` |
+| 2. Estimation | Estimate output elasticity (θ) by industry-year | `pipeline.run_estimation()` |
+| 3. Markup | `markup = θ / cost_share` | `pipeline.run_markup_calculation()` |
+| 4. Figures | Aggregate markup time series, PPI vs markup scatter | `pipeline.run_figures()` |
+| 5. Decomposition | Olley-Pakes: Within + Reallocation + Net Entry | `pipeline.run_decomposition()` |
 
-Downloads raw data from external sources:
-
-```python
-from PyMarkup.data import download_compustat, download_cpi, download_ppi, load_config
-
-config = load_config("config.yaml")
-download_ppi(config)        # No credentials needed
-download_cpi(config)        # Requires FRED API key
-download_compustat(config)  # Requires WRDS credentials
-```
-
-**Data Sources:**
-- **PPI**: Bureau of Labor Statistics Producer Price Index data from https://download.bls.gov/pub/time.series/pc/
-- **CPI**: Federal Reserve Economic Data (FRED) Consumer Price Index
-- **Compustat**: WRDS Compustat Fundamentals Annual/Quarterly
-
-### 2. Data Preparation
-
-Cleans and prepares the Compustat panel:
-- Deduplicates firm-year observations
-- Extracts NAICS industry codes
-- Deflates monetary values by GDP
-- Computes market shares
-- Trims outliers
-
-### 3. Elasticity Estimation
-
-Estimates output elasticity of variable inputs (θ) at the industry-year level:
+## Estimators
 
 | Method | Class | Use Case |
 |--------|-------|----------|
@@ -168,173 +65,34 @@ Estimates output elasticity of variable inputs (θ) at the industry-year level:
 | Cost Share | `CostShareEstimator` | Fast baseline, no regression needed |
 | ACF | `ACFEstimator` | Robustness, two-stage GMM with control function |
 
-```python
-from PyMarkup.estimators import WooldridgeIVEstimator
+All estimators support SG&A as a third input:
 
-estimator = WooldridgeIVEstimator(specification="spec2")
-elasticities = estimator.estimate_elasticities(panel_data)
-```
+| Estimator | Parameter | Default |
+|-----------|-----------|---------|
+| Wooldridge IV | `specification="spec1"` / `"spec2"` | `"spec2"` (with SG&A) |
+| Cost Share | `include_sga=True/False` | `False` |
+| ACF | `include_sga=True/False` | `False` |
 
-#### SG&A Configuration
+## Configuration
 
-All three estimators support including SG&A (Selling, General & Administrative expenses) as a third input in the production function:
+### Credentials
 
-| Estimator | Parameter | Options | Default |
-|-----------|-----------|---------|---------|
-| Wooldridge IV | `specification` | `"spec1"` (COGS+K), `"spec2"` (COGS+K+SG&A) | `"spec2"` |
-| Cost Share | `include_sga` | `True`, `False` | `False` |
-| ACF | `include_sga` | `True`, `False` | `False` |
-
-```python
-from PyMarkup.estimators import ACFEstimator, CostShareEstimator, WooldridgeIVEstimator
-
-# Wooldridge IV: use spec2 for 3-input (COGS + Capital + SG&A)
-iv_est = WooldridgeIVEstimator(specification="spec2")
-
-# Cost Share: include SG&A in cost share calculation
-cs_est = CostShareEstimator(include_sga=True)
-
-# ACF: include SG&A as third input
-acf_est = ACFEstimator(include_sga=True)
-```
-
-Via pipeline config:
-
-```python
-from PyMarkup import PipelineConfig, EstimatorConfig
-
-config = PipelineConfig(
-    compustat_path="Input/DLEU/Compustat_annual.csv",
-    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
-    estimator=EstimatorConfig(
-        method="all",
-        iv_specification="spec2",    # Wooldridge IV with SG&A
-        cs_include_sga=True,         # Cost Share with SG&A
-        acf_include_sga=True,        # ACF with SG&A
-    ),
-)
-```
-
-#### Aggregation Weights
-
-When aggregating firm-level markups to industry or economy level, you can choose the weighting scheme:
-
-| Weight Type | Formula | Use Case |
-|-------------|---------|----------|
-| `"revenue"` (default) | `firm_revenue / total_revenue` | Standard approach, larger firms weighted more |
-| `"cost"` | `firm_cogs / total_cogs` | Weight by production scale |
-
-```python
-from PyMarkup.core.markup_calculation import aggregate_markups
-
-# Revenue-weighted aggregation (default)
-agg = aggregate_markups(
-    firm_markups, by="year", method="weighted_mean",
-    weight_type="revenue", panel_data=panel_data
-)
-
-# Cost-weighted aggregation
-agg = aggregate_markups(
-    firm_markups, by="year", method="weighted_mean",
-    weight_type="cost", panel_data=panel_data
-)
-```
-
-Via pipeline config:
-```python
-config = PipelineConfig(
-    ...
-    aggregation_weight="revenue",  # or "cost"
-)
-```
-
-#### DEU Sample Filtering
-
-To replicate the original De Loecker, Eeckhout, and Unger (2020) paper results, you can filter the Compustat data to only include the firm-year observations from the original study:
+Set via `config.yaml` or environment variables:
 
 ```yaml
-# config.yaml
-use_deu_sample: true
-deu_observations_path: "Input/DLEU/DEU_observations.dta"
+fred_api_key: "your-fred-api-key"
+wrds_username: "your-wrds-username"
 ```
 
-Or via Python:
+Or: `FRED_API_KEY`, `WRDS_USERNAME`
 
-```python
-config = PipelineConfig(
-    compustat_path="Input/DLEU/Compustat_annual.csv",
-    macro_vars_path="Input/DLEU/macro_vars_new.xlsx",
-    use_deu_sample=True,
-    deu_observations_path="Input/DLEU/DEU_observations.dta",
-    ...
-)
-```
+### Data Requirements
 
-When enabled, the pipeline performs an inner merge on `gvkey` and `year` to filter to the original DLEU sample (approximately 242,000 firm-year observations from 1955-2016).
-
-### 4. Markup Calculation
-
-Computes firm-level markups using the De Loecker & Warzynski formula:
-
-```
-markup = θ / cost_share
-where cost_share = COGS / Revenue
-```
-
-### 5. Figures
-
-| Figure | Function | Description |
-|--------|----------|-------------|
-| Aggregate Markup | `plot_aggregate_markup()` | Time series of aggregate markups |
-| PPI vs Markup | `plot_markup_vs_ppi()` | Scatter plot with weighted OLS regression |
-
-### 6. Decomposition
-
-Dynamic Olley-Pakes decomposition of aggregate markup changes (DLEU 2020). The decomposition runs automatically in the pipeline for Wooldridge IV and Cost Share methods.
-
-**Decomposes markup growth into three components:**
-
-| Component | Description |
-|-----------|-------------|
-| **Within** | Markup changes within continuing firms |
-| **Reallocation** | Market share shifts toward high/low-markup firms |
-| **Net Entry** | Difference between entering and exiting firms |
-
-The components sum to the total markup change: `Within + Reallocation + Net Entry = Markup (benchmark)`
-
-**Output files:**
-
-| File | Description |
-|------|-------------|
-| `Output/intermediate/decomposition_wooldridge_iv.csv` | IV decomposition results |
-| `Output/intermediate/decomposition_cost_share.csv` | Cost Share decomposition results |
-| `Output/figures/Decomposition - Wooldridge IV (YYYY-YYYY).pdf` | IV decomposition figure |
-| `Output/figures/Decomposition - Cost Share (YYYY-YYYY).pdf` | Cost Share decomposition figure |
-
-**Standalone usage:**
-
-```python
-from PyMarkup.decomposition import OlleyPakesDecomposition, plot_decomposition
-
-op = OlleyPakesDecomposition(
-    firm_var="gvkey",
-    time_var="year",
-    markup_var="markup",
-    weight_var="sale_D",
-)
-decomp_results = op.decompose(firm_markups)
-
-# Plot with cumulative markup levels (DLEU Figure IV style)
-# All lines start at the same baseline and show counterfactual paths:
-# "What would markup be if only this component operated?"
-plot_decomposition(
-    decomp_results,
-    cumulative=True,
-    base_markup=1.21,  # Base period aggregate markup (e.g., 1980 value)
-    save_path="Output/decomposition.pdf",
-)
-```
-
+| Source | Credentials | Notes |
+|--------|-------------|-------|
+| Compustat (WRDS) | WRDS account | [Register](https://wrds-www.wharton.upenn.edu/) |
+| CPI (FRED) | FRED API key | [Get key](https://fred.stlouisfed.org/docs/api/api_key.html) |
+| PPI (BLS) | None | Public data |
 
 ## Project Structure
 
@@ -344,13 +102,9 @@ src/PyMarkup/
 ├── data/              # Data downloaders and loaders
 ├── estimators/        # WooldridgeIV, CostShare, ACF estimators
 ├── pipeline/          # MarkupPipeline orchestrator, config
-├── decomposition/     # Dynamic Olley-Pakes decomposition
+├── decomposition/     # Olley-Pakes decomposition
 ├── io/                # I/O schemas (Pydantic)
 └── cli/               # CLI commands
-
-Input/                 # Raw data (not version controlled)
-Intermediate/          # Generated datasets, theta estimates
-Output/                # Figures and tables
 ```
 
 ## License

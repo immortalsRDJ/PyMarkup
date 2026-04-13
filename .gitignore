@@ -218,8 +218,8 @@ Input/DLEU/*
 Input/Other/*
 !Input/Other/NAICS_2D_Description.xlsx
 Intermediate/
-# Output/
-# Output/report/
+Output/
+scripts/
 
 # Config with API keys (use config.example.yaml as template)
 config.yaml
@@ -230,6 +230,14 @@ config.yaml
 
 # Auxiliary replication code (not for distribution)
 src/BMYReplication/
+
+# Dev/internal files
+tests/
+justfile
+MANIFEST.in
+tmp_patch.txt
+dashboard.md
+*.pdf
 
 # Legacy numbered scripts (replaced by package modules)
 src/PyMarkup/0.0*
