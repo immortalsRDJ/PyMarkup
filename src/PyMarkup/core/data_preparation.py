@@ -307,3 +307,83 @@ def create_compustat_panel(
 
     logger.info(f"Created panel with {len(df)} observations")
     return df
+
+
+def create_compustat_panel_quarterly(
+    compustat_path: Path,
+    macro_path: Path,
+    trim_percentiles: tuple[float, float] = (0.01, 0.99),
+) -> pd.DataFrame:
+    """
+    Create quarterly Compustat panel data for markup estimation.
+
+    Mirrors the annual pipeline but uses quarterly columns (saleq, cogsq, etc.).
+    Macro variables (USGDP, usercost) are merged at annual frequency — the same
+    deflator applies to all four quarters of a fiscal year.
+
+    Parameters
+    ----------
+    compustat_path : Path
+        Path to Compustat_quarterly.csv
+    macro_path : Path
+        Path to macro_vars_new.xlsx
+    trim_percentiles : tuple
+        Lower and upper percentiles for trimming (default: 1st/99th)
+
+    Returns
+    -------
+    pd.DataFrame
+        Quarterly panel with deflated variables and quarter identifier
+    """
+    logger.info("Loading quarterly Compustat data...")
+    df = pd.read_csv(compustat_path)
+    df.columns = df.columns.str.lower()
+    logger.info(f"Loaded {len(df)} quarterly observations")
+
+    # Filter valid quarters
+    df = df.dropna(subset=["fyearq", "fqtr"])
+    df["fyearq"] = df["fyearq"].astype(int)
+    df["fqtr"] = df["fqtr"].astype(int)
+    df["year"] = df["fyearq"]
+    df["quarter"] = df["fyearq"].astype(str) + "Q" + df["fqtr"].astype(str)
+
+    # Sort and deduplicate
+    df["gvkey"] = df["gvkey"].astype(str).str.strip()
+    df = df.sort_values(["gvkey", "quarter"])
+    df = df.drop_duplicates(subset=["gvkey", "quarter"], keep="last")
+
+    # Industry codes
+    df["naics"] = df["naics"].astype(str).str.strip()
+    df = df[df["naics"].notna() & (df["naics"] != "") & (df["naics"] != "nan")]
+    df = prep_industry_codes(df)
+
+    # Scale to thousands (Compustat reports in millions)
+    for col in ["saleq", "cogsq", "xsgaq", "ppegtq"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce") * 1000
+
+    # Merge macro variables (annual → all quarters of that year)
+    macro = load_macro_vars(macro_path)
+    df = df.merge(macro, on="year", how="inner", validate="m:1")
+    logger.info(f"After macro merge: {len(df)} observations")
+
+    # Deflate by GDP
+    df["sale_D"] = (df["saleq"] / df["USGDP"]) * 100
+    df["cogs_D"] = (df["cogsq"] / df["USGDP"]) * 100
+    df["xsga_D"] = (df.get("xsgaq", pd.Series(dtype=float)) / df["USGDP"]) * 100
+    df["capital_D"] = (df["ppegtq"] / df["USGDP"]) * 100
+    df["kexp"] = df["usercost"] * df["capital_D"]
+
+    # Filter valid observations
+    df = df[(df["sale_D"] > 0) & (df["cogs_D"] > 0)]
+    df = df.dropna(subset=["sale_D", "cogs_D"])
+
+    # Trim sales/COGS ratio by quarter
+    lower, upper = trim_percentiles
+    df["_s_g"] = df["sale_D"] / df["cogs_D"]
+    p_lo = df.groupby("quarter")["_s_g"].transform(lambda x: x.quantile(lower))
+    p_hi = df.groupby("quarter")["_s_g"].transform(lambda x: x.quantile(upper))
+    df = df[(df["_s_g"] > p_lo) & (df["_s_g"] < p_hi)].drop(columns=["_s_g"])
+
+    logger.info(f"Created quarterly panel with {len(df)} observations")
+    return df

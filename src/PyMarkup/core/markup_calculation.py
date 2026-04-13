@@ -104,8 +104,8 @@ def compute_markups(
         logger.info(f"Cost share trimming: {n_before} -> {n_after} observations ({n_before - n_after} removed)")
 
     # Apply year filter (matching legacy 0.4 behavior: df[df["year"] >= 1955])
-    if min_year is not None:
-        df = df[df[time_col] >= min_year]
+    if min_year is not None and "year" in df.columns:
+        df = df[df["year"] >= min_year]
 
     # Apply industry filter (matching legacy 0.4 behavior: df[df["ind2d"] != 99])
     if exclude_ind2d is not None:
@@ -124,6 +124,8 @@ def compute_markups(
 
     # Select output columns
     output_cols = ["gvkey", "year", "ind2d", "markup", "theta_c", "cost_share"]
+    if "quarter" in df.columns:
+        output_cols.insert(2, "quarter")
     return df[output_cols].copy()
 
 
