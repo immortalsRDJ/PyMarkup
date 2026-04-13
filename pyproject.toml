@@ -1,6 +1,6 @@
 [project]
-name = "PyMarkup-estimator"
-version = "0.2.0-dev"
+name = "Pymkp"
+version = "0.1.0"
 description = "A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery."
 readme = "README.md"
 authors = [
@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: Scientific/Engineering :: Economics",
+    "Topic :: Scientific/Engineering",
 ]
 license = {text = "MIT"}
 dependencies = [
@@ -50,7 +50,7 @@ test = [
     "ipdb>=0.13",
 ]
 dev = [
-    "PyMarkup-estimator[test]",
+    "Pymkp[test]",
     "jupyter>=1.0",
     "ipython>=8.0",
 ]
@@ -59,11 +59,11 @@ wrds = [
 ]
 
 [project.urls]
-homepage = "https://github.com/immortalsRDJ/PyMarkup-estimator"
-repository = "https://github.com/immortalsRDJ/PyMarkup-estimator"
-documentation = "https://PyMarkup-estimator.readthedocs.io"
-bugs = "https://github.com/immortalsRDJ/PyMarkup-estimator/issues"
-changelog = "https://github.com/immortalsRDJ/PyMarkup-estimator/blob/main/CHANGELOG.md"
+homepage = "https://github.com/immortalsRDJ/PyMarkup"
+repository = "https://github.com/immortalsRDJ/PyMarkup"
+documentation = "https://github.com/immortalsRDJ/PyMarkup#readme"
+bugs = "https://github.com/immortalsRDJ/PyMarkup/issues"
+changelog = "https://github.com/immortalsRDJ/PyMarkup/blob/main/CHANGELOG.md"
 
 [project.scripts]
 pymarkup = "PyMarkup.cli.main:app"

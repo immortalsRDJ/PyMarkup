@@ -4,6 +4,14 @@ A Python toolkit for estimating firm-level markups using production function-bas
 
 ## Installation
 
+### From PyPI
+
+```bash
+pip install Pymkp
+```
+
+### From Source (for development)
+
 ```bash
 git clone https://github.com/immortalsRDJ/PyMarkup
 cd PyMarkup
@@ -13,6 +21,8 @@ uv sync
 For WRDS data downloads, add the `wrds` extra:
 
 ```bash
+pip install Pymkp[wrds]
+# or from source:
 uv sync --extra wrds
 ```
 
