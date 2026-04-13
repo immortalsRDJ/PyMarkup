@@ -178,6 +178,110 @@ def download_cpi(
 
 
 # =============================================================================
+# Macro Variables (FRED: GDPDEF + GS10)
+# =============================================================================
+
+
+def download_macro_vars(
+    config: DataConfig | None = None,
+    output_dir: Path | None = None,
+) -> Path:
+    """
+    Update macro_vars_new.xlsx by appending new years from FRED.
+
+    Pulls GDPDEF (GDP deflator) and GS10 (10-year Treasury yield) from FRED,
+    computes USGDP and usercost for years beyond the existing baseline file,
+    and appends them. Historical values (from DLEU) are never overwritten.
+
+    Formula (matches DLEU 2020):
+        USGDP = GDPDEF rebased to 2009 = 100
+        usercost = (GS10/100 - inflation) + 0.11
+
+    Parameters
+    ----------
+    config : DataConfig, optional
+        Configuration with fred_api_key
+    output_dir : Path, optional
+        Directory containing macro_vars_new.xlsx (default: config.data_dir / "DLEU")
+
+    Returns
+    -------
+    Path
+        Path to updated macro_vars_new.xlsx
+    """
+    from fredapi import Fred
+
+    config = config or load_config()
+    config.validate(require_fred=True)
+    output_dir = output_dir or config.data_dir / "DLEU"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / "macro_vars_new.xlsx"
+
+    # Load existing baseline
+    if not output_path.exists():
+        raise FileNotFoundError(
+            f"Baseline macro_vars_new.xlsx not found at {output_path}. "
+            "This file contains frozen DLEU historical values and must exist."
+        )
+    df_old = pd.read_excel(output_path)
+    df_old.columns = ["year", "USGDP", "usercost"]
+    # Drop rows with NaN values (incomplete years from prior runs)
+    df_old = df_old.dropna(subset=["USGDP", "usercost"]).reset_index(drop=True)
+    latest_year = int(df_old["year"].max())
+    logger.info(f"Existing macro vars cover 1954-{latest_year} ({len(df_old)} complete rows)")
+
+    # Pull fresh GDPDEF and GS10 from FRED
+    fred = Fred(api_key=config.fred_api_key)
+
+    gdpdef_series = fred.get_series("GDPDEF")
+    gs10_series = fred.get_series("GS10")
+
+    # Process GDPDEF → annual, rebase to 2009=100
+    df_gdpdef = gdpdef_series.reset_index()
+    df_gdpdef.columns = ["date", "gdpdef"]
+    df_gdpdef["year"] = df_gdpdef["date"].dt.year
+    df_gdpdef = df_gdpdef.groupby("year")["gdpdef"].last().reset_index()
+    df_gdpdef = df_gdpdef.sort_values("year").reset_index(drop=True)
+    df_gdpdef["pi"] = df_gdpdef["gdpdef"].pct_change()
+    base_value = df_gdpdef.loc[df_gdpdef["year"] == 2009, "gdpdef"].values[0]
+    df_gdpdef["USGDP"] = df_gdpdef["gdpdef"] / base_value * 100
+
+    # Process GS10 → annual
+    df_gs10 = gs10_series.reset_index()
+    df_gs10.columns = ["date", "gs10"]
+    df_gs10["year"] = df_gs10["date"].dt.year
+    df_gs10 = df_gs10.groupby("year")["gs10"].last().reset_index()
+
+    # Merge and compute usercost
+    df_new = pd.merge(
+        df_gdpdef[["year", "USGDP", "pi"]],
+        df_gs10[["year", "gs10"]],
+        on="year",
+        how="inner",
+    )
+    df_new["usercost"] = (df_new["gs10"] / 100 - df_new["pi"]) + 0.11
+    df_new = df_new[df_new["year"] >= 1954][["year", "USGDP", "usercost"]]
+
+    # Append only new years (preserve frozen historical values)
+    df_append = df_new[df_new["year"] > latest_year].reset_index(drop=True)
+
+    if df_append.empty:
+        logger.info("Macro vars already up to date, no new years to append")
+        return output_path
+
+    df_updated = pd.concat([df_old, df_append], ignore_index=True)
+    df_updated = df_updated.sort_values("year").reset_index(drop=True)
+    df_updated.to_excel(output_path, index=False)
+
+    new_max = int(df_updated["year"].max())
+    logger.info(f"Updated macro vars: appended {len(df_append)} new year(s) ({latest_year + 1}-{new_max})")
+    logger.info(f"Saved to {output_path}")
+
+    return output_path
+
+
+# =============================================================================
 # PPI (BLS)
 # =============================================================================
 
@@ -344,6 +448,15 @@ def download_all(
         logger.info("=" * 60)
         logger.info("Downloading Compustat data...")
         results["compustat"] = download_compustat(config)
+
+    # Always try to update macro vars (requires FRED API key)
+    if config.fred_api_key:
+        logger.info("=" * 60)
+        logger.info("Updating macro variables...")
+        try:
+            results["macro_vars"] = download_macro_vars(config)
+        except Exception as exc:
+            logger.warning(f"Macro vars update failed: {exc}")
 
     logger.info("=" * 60)
     logger.info("All downloads complete!")

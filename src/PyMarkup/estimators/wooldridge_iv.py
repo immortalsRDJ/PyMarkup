@@ -325,8 +325,9 @@ class WooldridgeIVEstimator(ProductionFunctionEstimator):
 
         # Rolling windows from 1970 onwards
         window_half = self.window_years // 2
+        max_year = int(df["year"].max()) + 1
 
-        for t in range(1970, 2025):
+        for t in range(1970, max_year):
             window_mask = (df["year"] >= t - window_half) & (df["year"] <= t + window_half)
 
             # Industries 1-16

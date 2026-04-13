@@ -1,7 +1,7 @@
 """Data loading and downloading utilities."""
 
 from .config import DataConfig, load_config
-from .downloaders import download_all, download_compustat, download_cpi, download_ppi
+from .downloaders import download_all, download_compustat, download_cpi, download_macro_vars, download_ppi
 from .loaders import load_compustat, load_cpi, load_macro_vars, load_naics_descriptions, load_ppi
 
 __all__ = [
@@ -13,6 +13,7 @@ __all__ = [
     "download_compustat",
     "download_cpi",
     "download_ppi",
+    "download_macro_vars",
     # Loaders
     "load_compustat",
     "load_cpi",
