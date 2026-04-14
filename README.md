@@ -13,13 +13,13 @@ A Python toolkit for estimating firm-level markups using production function-bas
 pip install Pymkp
 ```
 
-For development:
+<!-- For development:
 
 ```bash
 git clone https://github.com/immortalsRDJ/PyMarkup
 cd PyMarkup
 uv sync
-```
+``` -->
 
 ## Quick Start
 
@@ -37,7 +37,7 @@ pymarkup run-all --config config.yaml
 pymarkup run-all --config config.yaml --skip-download
 ```
 
-## Pipeline
+<!-- ## Pipeline
 
 ```
 Download --> Data Preparation --> Elasticity Estimation --> Markup Calculation --> Figures & Decomposition
@@ -100,7 +100,7 @@ src/PyMarkup/
 ├── decomposition/     # Olley-Pakes decomposition
 ├── io/                # I/O schemas (Pydantic)
 └── cli/               # CLI commands
-```
+``` -->
 
 ## License
 
