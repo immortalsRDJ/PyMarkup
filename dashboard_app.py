@@ -558,4 +558,7 @@ def _stat_card(label, value):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8050)
+    import sys
+    port = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8050
+    host = sys.argv[sys.argv.index("--host") + 1] if "--host" in sys.argv else "127.0.0.1"
+    app.run(debug=False, host=host, port=port)
