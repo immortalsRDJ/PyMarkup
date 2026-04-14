@@ -23,7 +23,11 @@ DATA_DIR = Path(__file__).parent / "data"
 NAICS_PATH = Path(__file__).parent / "Input" / "Other" / "NAICS_2D_Description.xlsx"
 
 def load_data():
-    df = pd.read_parquet(DATA_DIR / "firm_markups.parquet")
+    # Find the newest parquet file
+    parquet_files = sorted(DATA_DIR.glob("firm_markups_*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError("No parquet files found in data/. Run: python scripts/build_dashboard_data.py")
+    df = pd.read_parquet(parquet_files[-1])  # latest by name (sorted alphabetically = chronologically)
     # Load NAICS descriptions
     if NAICS_PATH.exists():
         naics = pd.read_excel(NAICS_PATH)
@@ -46,6 +50,7 @@ MEASURES = {
     "markup_iv_spec1": "Wooldridge IV - Spec 1 (COGS+K)",
     "markup_iv_spec2": "Wooldridge IV - Spec 2 (COGS+K+SGA)",
     "markup_cs": "Cost Share",
+    "markup_acf": "ACF",
 }
 
 WEIGHTS = {
@@ -108,6 +113,12 @@ app.layout = html.Div(
                         placeholder="All industries",
                         style={"width": "400px"},
                     ),
+                    dcc.Checklist(
+                        id="show-individual",
+                        options=[{"label": " Show individual industry lines", "value": "show"}],
+                        value=["show"],
+                        style={"marginTop": "5px", "fontSize": "13px"},
+                    ),
                 ]),
             ],
         ),
@@ -135,6 +146,123 @@ app.layout = html.Div(
             "padding": "15px", "backgroundColor": "#f8f9fa", "borderRadius": "8px",
         }),
 
+        # Top/Bottom firms section
+        html.Hr(style={"marginTop": "30px"}),
+        html.H3("Firm Rankings", style={"marginBottom": "10px"}),
+        html.Div(
+            style={"display": "flex", "gap": "20px", "marginBottom": "15px", "alignItems": "center"},
+            children=[
+                html.Div([
+                    html.Label("Measure", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="table-measure",
+                        options=[{"label": v, "value": k} for k, v in MEASURES.items()],
+                        value="markup_iv_spec1",
+                        clearable=False,
+                        style={"width": "250px"},
+                    ),
+                ]),
+                html.Div([
+                    html.Label("From", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="table-year-start",
+                        options=[{"label": str(y), "value": y} for y in range(int(DF["year"].min()), int(DF["year"].max()) + 1)],
+                        value=2018,
+                        clearable=False,
+                        style={"width": "100px"},
+                    ),
+                ]),
+                html.Div([
+                    html.Label("To", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="table-year-end",
+                        options=[{"label": str(y), "value": y} for y in range(int(DF["year"].min()), int(DF["year"].max()) + 1)],
+                        value=int(DF["year"].max()),
+                        clearable=False,
+                        style={"width": "100px"},
+                    ),
+                ]),
+            ],
+        ),
+        html.Div(
+            style={"display": "flex", "gap": "20px", "flexWrap": "wrap"},
+            children=[
+                html.Div([
+                    html.H4(id="top-title", style={"marginBottom": "5px"}),
+                    html.Div(id="top-table"),
+                ], style={"flex": "1", "minWidth": "300px"}),
+                html.Div([
+                    html.H4(id="bottom-title", style={"marginBottom": "5px"}),
+                    html.Div(id="bottom-table"),
+                ], style={"flex": "1", "minWidth": "300px"}),
+                html.Div([
+                    html.H4(id="contrib-title", style={"marginBottom": "5px"}),
+                    dcc.RadioItems(
+                        id="contrib-weight",
+                        options=[
+                            {"label": " Revenue share x markup", "value": "revenue"},
+                            {"label": " Cost share x markup", "value": "cost"},
+                        ],
+                        value="revenue",
+                        style={"fontSize": "12px", "color": "#888", "marginBottom": "8px"},
+                    ),
+                    html.Div(id="contrib-table"),
+                ], style={"flex": "1", "minWidth": "300px"}),
+            ],
+        ),
+
+        # Firm-level markup plot
+        html.Hr(style={"marginTop": "30px"}),
+        html.H3("Firm-Level Markup", style={"marginBottom": "10px"}),
+        html.Div(
+            style={"display": "flex", "gap": "20px", "marginBottom": "15px", "alignItems": "center",
+                    "flexWrap": "wrap"},
+            children=[
+                html.Div([
+                    html.Label("Measure", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="firm-measure",
+                        options=[{"label": v, "value": k} for k, v in MEASURES.items()],
+                        value="markup_iv_spec1",
+                        clearable=False,
+                        style={"width": "250px"},
+                    ),
+                ]),
+                html.Div([
+                    html.Label("From", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="firm-year-start",
+                        options=[{"label": str(y), "value": y} for y in range(int(DF["year"].min()), int(DF["year"].max()) + 1)],
+                        value=1955,
+                        clearable=False,
+                        style={"width": "100px"},
+                    ),
+                ]),
+                html.Div([
+                    html.Label("To", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="firm-year-end",
+                        options=[{"label": str(y), "value": y} for y in range(int(DF["year"].min()), int(DF["year"].max()) + 1)],
+                        value=int(DF["year"].max()),
+                        clearable=False,
+                        style={"width": "100px"},
+                    ),
+                ]),
+                html.Div([
+                    html.Label("Search firms (multiple)", style={"fontWeight": "bold", "fontSize": "13px"}),
+                    dcc.Dropdown(
+                        id="firm-search",
+                        options=[],
+                        value=["6008"],  # Intel Corp
+                        multi=True,
+                        placeholder="Type firm name...",
+                        style={"width": "500px"},
+                    ),
+                ]),
+            ],
+        ),
+        dcc.Graph(id="firm-chart", style={"height": "400px"}),
+
         # Footer
         html.Hr(),
         html.P(
@@ -157,8 +285,9 @@ app.layout = html.Div(
     Input("weight", "value"),
     Input("industries", "value"),
     Input("year-range", "value"),
+    Input("show-individual", "value"),
 )
-def update_chart(measure, weight, industries, year_range):
+def update_chart(measure, weight, industries, year_range, show_individual):
     # Filter
     mask = (DF["year"] >= year_range[0]) & (DF["year"] <= year_range[1])
     filtered = DF[mask].copy()
@@ -207,23 +336,24 @@ def update_chart(measure, weight, industries, year_range):
             x=agg_all["year"], y=agg_all["value"],
             mode="lines",
             line=dict(color="#1f77b4", width=3),
-            name="All selected",
+            name="Avg of selected industries",
         ))
-        # Per-industry lines
-        colors = ["#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
-                  "#e377c2", "#7f7f7f", "#bcbd22", "#17becf", "#aec7e8"]
-        for i, ind in enumerate(sorted(industries)):
-            ind_data = filtered[filtered["ind2d"] == ind]
-            if ind_data.empty:
-                continue
-            ind_agg = _aggregate(ind_data).sort_values("year")
-            label = f"{int(ind)} - {NAICS_MAP.get(int(ind), 'Unknown')}"
-            fig.add_trace(go.Scatter(
-                x=ind_agg["year"], y=ind_agg["value"],
-                mode="lines",
-                line=dict(color=colors[i % len(colors)], width=1.5, dash="dash"),
-                name=label,
-            ))
+        # Per-industry lines (only if checkbox is checked)
+        if "show" in (show_individual or []):
+            colors = ["#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+                      "#e377c2", "#7f7f7f", "#bcbd22", "#17becf", "#aec7e8"]
+            for i, ind in enumerate(sorted(industries)):
+                ind_data = filtered[filtered["ind2d"] == ind]
+                if ind_data.empty:
+                    continue
+                ind_agg = _aggregate(ind_data).sort_values("year")
+                label = f"{int(ind)} - {NAICS_MAP.get(int(ind), 'Unknown')}"
+                fig.add_trace(go.Scatter(
+                    x=ind_agg["year"], y=ind_agg["value"],
+                    mode="lines",
+                    line=dict(color=colors[i % len(colors)], width=1.5, dash="dash"),
+                    name=label,
+                ))
         agg = agg_all
     else:
         # No industry filter or single industry → one line
@@ -258,6 +388,162 @@ def update_chart(measure, weight, industries, year_range):
     ]
 
     return fig, stats
+
+
+@callback(
+    Output("top-title", "children"),
+    Output("top-table", "children"),
+    Output("bottom-title", "children"),
+    Output("bottom-table", "children"),
+    Output("contrib-title", "children"),
+    Output("contrib-table", "children"),
+    Input("table-measure", "value"),
+    Input("industries", "value"),
+    Input("table-year-start", "value"),
+    Input("table-year-end", "value"),
+    Input("contrib-weight", "value"),
+)
+def update_tables(measure, industries, year_start, year_end, contrib_weight):
+    # Filter to table period
+    y0, y1 = min(year_start, year_end), max(year_start, year_end)
+    mask = (DF["year"] >= y0) & (DF["year"] <= y1)
+    filtered = DF[mask].copy()
+
+    if industries:
+        filtered = filtered[filtered["ind2d"].isin(industries)]
+
+    filtered = filtered.dropna(subset=[measure])
+
+    period = str(y0) if y0 == y1 else f"{y0}-{y1}"
+    top_title = f"Top 10 Avg Markup ({period})"
+    bottom_title = f"Bottom 10 Avg Markup ({period})"
+
+    contrib_title = f"Top 10 Contributors ({period})"
+    if filtered.empty:
+        return top_title, "No data", bottom_title, "No data", contrib_title, "No data"
+
+    # Average markup per firm over the period
+    firm_avg = (
+        filtered.groupby(["gvkey", "conm", "ind2d"])[measure]
+        .mean()
+        .reset_index()
+        .sort_values(measure, ascending=False)
+    )
+
+    top10 = firm_avg.head(10)[["conm", "ind2d", measure]].copy()
+    bottom10 = firm_avg.tail(10).sort_values(measure)[["conm", "ind2d", measure]].copy()
+
+    # Top contributors: share × markup
+    weight_col = "sale_D" if contrib_weight == "revenue" else "cogs_D"
+    filtered["_share"] = filtered[weight_col] / filtered.groupby("year")[weight_col].transform("sum")
+    filtered["_contribution"] = filtered["_share"] * filtered[measure]
+    contrib_avg = (
+        filtered.groupby(["gvkey", "conm", "ind2d"])
+        .agg({measure: "mean", "_contribution": "mean", "_share": "mean"})
+        .reset_index()
+        .sort_values("_contribution", ascending=False)
+    )
+    top_contrib = contrib_avg.head(10)[["conm", "ind2d", measure, "_share", "_contribution"]].copy()
+
+    measure_label = MEASURES.get(measure, measure)
+
+    def _make_table(df):
+        df = df.copy()
+        df.columns = ["Firm", "Industry", measure_label]
+        df[measure_label] = df[measure_label].map(lambda x: f"{x:.3f}")
+        df["Industry"] = df["Industry"].map(lambda x: NAICS_MAP.get(int(x), str(int(x))) if pd.notna(x) else "")
+        return html.Table(
+            [html.Tr([html.Th(c, style={"padding": "6px 12px", "borderBottom": "2px solid #ddd",
+                                         "textAlign": "left", "fontSize": "13px"}) for c in df.columns])]
+            + [html.Tr([html.Td(row[c], style={"padding": "5px 12px", "borderBottom": "1px solid #eee",
+                                                "fontSize": "13px"}) for c in df.columns])
+               for _, row in df.iterrows()],
+            style={"borderCollapse": "collapse", "width": "100%"},
+        )
+
+    def _make_contrib_table(df):
+        df = df.copy()
+        df.columns = ["Firm", "Industry", "Markup", "Share", "Contribution"]
+        df["Markup"] = df["Markup"].map(lambda x: f"{x:.3f}")
+        df["Share"] = df["Share"].map(lambda x: f"{x:.4f}")
+        df["Contribution"] = df["Contribution"].map(lambda x: f"{x:.4f}")
+        df["Industry"] = df["Industry"].map(lambda x: NAICS_MAP.get(int(x), str(int(x))) if pd.notna(x) else "")
+        return html.Table(
+            [html.Tr([html.Th(c, style={"padding": "6px 12px", "borderBottom": "2px solid #ddd",
+                                         "textAlign": "left", "fontSize": "13px"}) for c in df.columns])]
+            + [html.Tr([html.Td(row[c], style={"padding": "5px 12px", "borderBottom": "1px solid #eee",
+                                                "fontSize": "13px"}) for c in df.columns])
+               for _, row in df.iterrows()],
+            style={"borderCollapse": "collapse", "width": "100%"},
+        )
+
+    return (top_title, _make_table(top10), bottom_title, _make_table(bottom10),
+            contrib_title, _make_contrib_table(top_contrib))
+
+
+# Build firm options for search (unique firm names)
+_FIRM_OPTIONS = (
+    DF[["gvkey", "conm"]].drop_duplicates()
+    .sort_values("conm")
+    .apply(lambda r: {"label": r["conm"], "value": r["gvkey"]}, axis=1)
+    .tolist()
+)
+
+
+@callback(
+    Output("firm-search", "options"),
+    Input("firm-measure", "value"),
+)
+def update_firm_options(measure):
+    valid_gvkeys = DF.dropna(subset=[measure])["gvkey"].unique()
+    return [opt for opt in _FIRM_OPTIONS if opt["value"] in valid_gvkeys]
+
+
+@callback(
+    Output("firm-chart", "figure"),
+    Input("firm-search", "value"),
+    Input("firm-measure", "value"),
+    Input("firm-year-start", "value"),
+    Input("firm-year-end", "value"),
+)
+def update_firm_chart(gvkeys, measure, year_start, year_end):
+    fig = go.Figure()
+
+    if not gvkeys:
+        fig.add_annotation(text="Search and select firms above", showarrow=False,
+                           font=dict(size=16, color="gray"))
+        fig.update_layout(template="plotly_white", margin=dict(l=60, r=20, t=40, b=40))
+        return fig
+
+    y0, y1 = min(year_start, year_end), max(year_start, year_end)
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+              "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+
+    for i, gvkey in enumerate(gvkeys[:20]):  # cap at 20 firms to keep it responsive
+        firm_data = DF[(DF["gvkey"] == gvkey) & (DF["year"] >= y0) & (DF["year"] <= y1)].copy()
+        firm_data = firm_data.dropna(subset=[measure]).sort_values("year")
+        if firm_data.empty:
+            continue
+        name = firm_data["conm"].iloc[0]
+        fig.add_trace(go.Scatter(
+            x=firm_data["year"], y=firm_data[measure],
+            mode="lines+markers",
+            line=dict(color=colors[i % len(colors)], width=2),
+            marker=dict(size=4),
+            name=name,
+        ))
+
+    measure_label = MEASURES.get(measure, measure)
+    fig.update_layout(
+        template="plotly_white",
+        xaxis_title="Year",
+        yaxis_title=measure_label,
+        margin=dict(l=60, r=20, t=40, b=40),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+
+    return fig
 
 
 def _stat_card(label, value):
