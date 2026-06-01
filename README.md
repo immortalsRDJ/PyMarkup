@@ -1,11 +1,9 @@
 # PyMarkup
 
-[![Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pymarkup.streamlit.app/)
 [![PyPI](https://img.shields.io/pypi/v/Pymkp)](https://pypi.org/project/Pymkp/)
 
 A Python toolkit for estimating firm-level markups using production function-based marginal cost recovery.
 
-**[Live Dashboard](https://pymarkup.streamlit.app/)** | **[PyPI](https://pypi.org/project/Pymkp/)**
 
 ## Installation
 
