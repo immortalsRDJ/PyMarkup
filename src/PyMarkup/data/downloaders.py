@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import warnings
 from pathlib import Path
 
@@ -311,19 +312,19 @@ def download_ppi(
 
     raw_path = output_dir / "pc.data.0.Current.txt"
 
-    # Download raw data
+    # Download raw data via curl — BLS's WAF fingerprints Python's `requests`
+    # library and returns a 403 "Access Denied" page even with a valid UA, but
+    # accepts curl. Shelling out is the cleanest workaround.
     logger.info(f"Downloading PPI data from {config.ppi_url}...")
-    response = requests.get(
-        config.ppi_url,
-        headers={"User-Agent": "PyMarkup (https://github.com/immortalsRDJ/PyMarkup; ym3593@nyu.edu)"},
-        timeout=120,
-        stream=True,
+    subprocess.run(
+        [
+            "curl", "-sS", "--fail",
+            "-A", "PyMarkup (https://github.com/immortalsRDJ/PyMarkup; ym3593@nyu.edu)",
+            "-o", str(raw_path),
+            config.ppi_url,
+        ],
+        check=True,
     )
-    response.raise_for_status()
-
-    with open(raw_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
     logger.info(f"Downloaded raw PPI data to {raw_path}")
 
     # Process data
