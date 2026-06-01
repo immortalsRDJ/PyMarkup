@@ -5,7 +5,7 @@
 # restarts the Dash service so the new data is served.
 #
 # Scheduled from cron, e.g.:
-#   0 3 1 * * /home/ubuntu/PyMarkup/scripts/monthly_refresh.sh
+#   0 3 1 * * /home/ec2-user/PyMarkup/scripts/monthly_refresh.sh
 #
 # Prerequisites on the host (one-time setup):
 #   - ~/.pgpass with WRDS credentials (mode 600)
@@ -24,6 +24,10 @@ echo "[$TS] === Starting monthly refresh ===" >> "$LOG"
 cd "$REPO"
 # shellcheck disable=SC1091
 source .venv/bin/activate
+
+# Export WRDS_USERNAME from config.yaml so wrds.Connection() picks it up
+# without prompting (downloaders.py calls it bare without a username kwarg).
+export WRDS_USERNAME=$(python -c "import yaml; print(yaml.safe_load(open('config.yaml'))['wrds_username'])")
 
 echo "[$TS] Step 1/3: pymarkup run-all" >> "$LOG"
 pymarkup run-all --config config.yaml >> "$LOG" 2>&1
