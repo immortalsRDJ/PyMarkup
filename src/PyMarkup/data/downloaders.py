@@ -315,7 +315,7 @@ def download_ppi(
     logger.info(f"Downloading PPI data from {config.ppi_url}...")
     response = requests.get(
         config.ppi_url,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+        headers={"User-Agent": "PyMarkup (https://github.com/immortalsRDJ/PyMarkup; ym3593@nyu.edu)"},
         timeout=120,
         stream=True,
     )
