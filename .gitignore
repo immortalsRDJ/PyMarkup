@@ -224,10 +224,6 @@ Input/Other/*
 Intermediate/
 Output/
 
-scripts/*
-!scripts/build_dashboard_data.py     
-!scripts/generate_report_figures.py  
-
 # Config with API keys (use config.example.yaml as template)
 config.yaml
 
