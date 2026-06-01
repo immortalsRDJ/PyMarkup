@@ -319,7 +319,7 @@ def download_ppi(
     subprocess.run(
         [
             "curl", "-sS", "--fail",
-            "-A", "PyMarkup (https://github.com/immortalsRDJ/PyMarkup; ym3593@nyu.edu)",
+            "-A", "PyMarkup (ym3593@nyu.edu)",
             "-o", str(raw_path),
             config.ppi_url,
         ],
