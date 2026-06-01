@@ -164,7 +164,7 @@ def download_cpi(
 
     # Quarterly CPI (months 1, 4, 7, 10)
     df["year_str"] = df["year"].astype(str)
-    df["quarter"] = np.nan
+    df["quarter"] = pd.Series(pd.NA, index=df.index, dtype="object")
     df.loc[df.month == 1, "quarter"] = df["year_str"] + "Q1"
     df.loc[df.month == 4, "quarter"] = df["year_str"] + "Q2"
     df.loc[df.month == 7, "quarter"] = df["year_str"] + "Q3"
