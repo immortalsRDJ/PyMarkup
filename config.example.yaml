@@ -8,7 +8,7 @@ macro_vars_path: "Input/DLEU/macro_vars_new.xlsx"
 # Estimator settings
 estimator:
   method: "all"                    # wooldridge_iv, cost_share, acf, or all
-  iv_specification: "spec2"        # spec1 (no SG&A) or spec2 (with SG&A)
+  iv_specification: "both"         # spec1 (no SG&A), spec2 (with SG&A), or both
   cs_include_sga: false            # Cost share: include SG&A
   cs_aggregation: "median"         # median, mean, or weighted_mean
   acf_include_market_share: true   # ACF: include market share controls

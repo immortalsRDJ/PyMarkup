@@ -37,6 +37,9 @@ dependencies = [
     "requests>=2.32.5",
     "fredapi>=0.5.2",
     "wrds>=3.1.6",
+    "dash>=2.14",
+    "plotly>=5.18",
+    "pyarrow>=14.0",
 ]
 requires-python = ">= 3.10"
 

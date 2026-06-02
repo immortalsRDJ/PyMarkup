@@ -54,17 +54,24 @@ def build_firm_parquet() -> pd.DataFrame:
     df["costshare_basic"] = df["cogs_D"] / df["sale_D"]
     df["costshare_capital"] = df["cogs_D"] / (df["cogs_D"] + df["kexp"])
 
-    # Markups: IV spec1, IV spec2, Cost Share
+    # Markups: IV spec1, IV spec2, Cost Share, ACF.
+    # Each value is a list of candidate filenames tried in order — handles both
+    # the dual-spec output (markups_wooldridge_iv_spec1.csv) and legacy /
+    # single-spec runs (markups_wooldridge_iv.csv).
     logger.info("Merging markups...")
     markup_sources = {
-        "markup_iv_spec1": "markups_iv_spec1.csv",
-        "markup_iv_spec2": "markups_iv_spec2.csv",
-        "markup_cs": "markups_cost_share.csv",
-        "markup_acf": "markups_acf.csv",
+        "markup_iv_spec1": ["markups_wooldridge_iv_spec1.csv", "markups_iv_spec1.csv"],
+        "markup_iv_spec2": ["markups_wooldridge_iv_spec2.csv", "markups_iv_spec2.csv", "markups_wooldridge_iv.csv"],
+        "markup_cs": ["markups_cost_share.csv"],
+        "markup_acf": ["markups_acf.csv"],
     }
 
-    for col_name, filename in markup_sources.items():
-        markups = load_markups(filename)
+    for col_name, candidates in markup_sources.items():
+        markups = pd.DataFrame()
+        for filename in candidates:
+            markups = load_markups(filename)
+            if not markups.empty:
+                break
         if markups.empty:
             df[col_name] = float("nan")
             continue

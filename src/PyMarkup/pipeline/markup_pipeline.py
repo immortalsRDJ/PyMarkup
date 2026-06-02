@@ -75,12 +75,24 @@ class MarkupPipeline:
         method = self.config.estimator.method
 
         if method in ["wooldridge_iv", "all"]:
-            self.estimators["wooldridge_iv"] = WooldridgeIVEstimator(
-                specification=self.config.estimator.iv_specification,
-                window_years=self.config.estimator.window_years,
-                industry_level=self.config.estimator.industry_level,
-                min_observations=self.config.estimator.min_observations,
-            )
+            iv_spec = self.config.estimator.iv_specification
+            if iv_spec == "both":
+                # Register one estimator per spec so each produces its own
+                # markups_*.csv file (downstream builders / dashboard read both).
+                for spec in ("spec1", "spec2"):
+                    self.estimators[f"wooldridge_iv_{spec}"] = WooldridgeIVEstimator(
+                        specification=spec,
+                        window_years=self.config.estimator.window_years,
+                        industry_level=self.config.estimator.industry_level,
+                        min_observations=self.config.estimator.min_observations,
+                    )
+            else:
+                self.estimators["wooldridge_iv"] = WooldridgeIVEstimator(
+                    specification=iv_spec,
+                    window_years=self.config.estimator.window_years,
+                    industry_level=self.config.estimator.industry_level,
+                    min_observations=self.config.estimator.min_observations,
+                )
 
         if method in ["cost_share", "all"]:
             self.estimators["cost_share"] = CostShareEstimator(
@@ -221,6 +233,12 @@ class MarkupPipeline:
 
             except Exception as exc:
                 logger.error(f"✗ {name} failed: {exc}")
+
+        # If both IV specs were estimated, expose spec2 under the "wooldridge_iv"
+        # key as well so figure/decomposition steps (which hardcode that name)
+        # still work without code changes.
+        if "wooldridge_iv_spec2" in all_markups and "wooldridge_iv" not in all_markups:
+            all_markups["wooldridge_iv"] = all_markups["wooldridge_iv_spec2"]
 
         return all_markups
 
