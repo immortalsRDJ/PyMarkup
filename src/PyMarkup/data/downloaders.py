@@ -51,7 +51,11 @@ def download_compustat(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Connecting to WRDS...")
-    db = wrds.Connection()
+    db = (
+        wrds.Connection(wrds_username=config.wrds_username)
+        if config.wrds_username
+        else wrds.Connection()
+    )
 
     # Use the raw psycopg2 connection for pandas compatibility
     raw_conn = db.engine.raw_connection()

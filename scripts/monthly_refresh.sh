@@ -25,10 +25,6 @@ cd "$REPO"
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-# Export WRDS_USERNAME from config.yaml so wrds.Connection() picks it up
-# without prompting (downloaders.py calls it bare without a username kwarg).
-export WRDS_USERNAME=$(python -c "import yaml; print(yaml.safe_load(open('config.yaml'))['wrds_username'])")
-
 echo "[$TS] Step 1/3: pymarkup run-all" >> "$LOG"
 pymarkup run-all --config config.yaml >> "$LOG" 2>&1
 
